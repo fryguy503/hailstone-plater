@@ -4,6 +4,12 @@ local C = require('crest.config')
 local M = {}
 local classes={"Warrior","Cleric","Paladin","Ranger","Shadow Knight","Druid","Monk","Bard","Rogue","Shaman","Necromancer","Wizard","Magician","Enchanter","Beastlord","Berserker"}
 local class_colors={0xc79c6e,0xffffff,0xf58cba,0xabd473,0xc41f3b,0xff7d0a,0x00ff96,0xe6cc80,0xfff569,0x0070de,0x9482c9,0x69ccf0,0x40c7eb,0xa78be8,0x7fbb88,0xe89569}
+local concealment_tags={
+  {label='INV',color=0x79def3,text_only=true},
+  {label='IVU',color=0xc4a6ff,text_only=true},
+  {label='INV+IVU',color=0xffd989,text_only=true},
+  {label='HID',color=0xaebccc,text_only=true},
+}
 local function percent(n) return C.finite(n) and math.max(0,math.min(100,n)) or nil end
 local function clean(name) return C.text(name,128):gsub('^#+',''):gsub('%d+$',''):gsub('_',' ') end
 local function trim_name(text, max)
@@ -138,6 +144,20 @@ function M:presentation(spawn,ctx,s,extra)
     if s.highlight_cast and not targeted then p.border_color=s.cast_color end
   end
   local function badge(b) if #p.badges<8 then p.badges[#p.badges+1]=b end end
+  local display=s.concealment_display
+  if display~='Off' and not spawn.corpse then
+    local flags=extra.npc_concealment or ((ctx.invisible==true and 1 or 0)+(ctx.invisible_undead==true and 2 or 0))
+    local tag=concealment_tags[flags] or (ctx.concealed==true and concealment_tags[4])
+    if tag then
+      if display=='Name suffix' and p.show_name and p.name~='' then
+        p.name_suffix=' ['..tag.label..']'
+        p.name_fallback_badge=tag
+      else
+        if display=='Parentheses + tags' then p.name_prefix,p.name_suffix='(',')' end
+        badge(tag)
+      end
+    end
+  end
   for _,b in ipairs(extra.server_indicators or {}) do
     local awareness=b.icon=='eye'; local status=b.icon=='peace' or b.icon=='sleep'
     if (awareness and s.server_indicators_awareness) or (status and s.server_indicators_status) or

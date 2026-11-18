@@ -1,5 +1,10 @@
 # Changes
 
+## 0.3.0-preview.2
+
+- Added configurable concealment tags for regular invisibility, invisibility to undead, both, and unknown concealment. Choose tags, parentheses with tags, a name suffix, or off.
+- Read known concealment from Hailstone's nameplate context and exact NPC invisibility types from compatible servers.
+
 ## 0.3.0-preview.1
 
 - Made Crest a standalone optional add-on using the generic nameplate canvas service from the shared UI API update.

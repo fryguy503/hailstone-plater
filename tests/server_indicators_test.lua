@@ -38,7 +38,7 @@ local function snapshot(magic, generation, index, chunks, entries, options)
     return table.concat(parts)
 end
 
-local A, S, P = 0x4e504131, 0x4e505331, 0x4e504d31
+local A, S, P, C = 0x4e504131, 0x4e505331, 0x4e504d31, 0x4e504331
 local AO, MO = 0x7d1d, 0x7d1c
 local function mark(action, icon, scope, target, options)
     options = options or {}
@@ -91,6 +91,21 @@ test("empty full snapshots clear only their stream", function()
     check(not badge(d, 1, 1, "eye"))
     check(d:receive(AO, snapshot(S, 2, 0, 1, {}), 2))
     equal(#d:badges(1, 2), 0)
+end)
+
+test("concealment snapshot is atomic, independent, and expires", function()
+    local d = Server.new()
+    check(d:receive(AO, snapshot(A, 2, 0, 1, { { 1, 1 } }), 1))
+    check(d:receive(AO, snapshot(C, 2, 1, 2, { { 1, 3 } }), 2))
+    equal(d:concealment(1, 2), nil)
+    check(d:receive(AO, snapshot(C, 2, 0, 2, { { 2, 1 }, { 3, 2 } }), 3))
+    equal(d:concealment(1, 3), 3)
+    equal(d:concealment(2, 3), 1)
+    equal(d:concealment(3, 3), 2)
+    check(badge(d, 1, 3, "eye"))
+    d:remove(1)
+    equal(d:concealment(1, 3), nil)
+    equal(d:concealment(2, 5004), nil)
 end)
 
 test("malformed snapshot headers never publish", function()

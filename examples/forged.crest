@@ -79,6 +79,7 @@ cast_reverse=false
 highlight_cast=true
 target_marker=true
 stock_marks=true
+concealment_display=Parentheses + tags
 server_indicators_awareness=true
 server_indicators_status=true
 server_indicators_marks=true

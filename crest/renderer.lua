@@ -132,20 +132,30 @@ function R.prepare(style,context,metrics)
     local m=measured(text,size)
     return math.max(size,m.height,m.ink_y1)-math.min(0,m.ink_y0),math.min(0,m.ink_y0)
   end
-  local function fit(text,size,available)
+  local function fit(text,size,available,prefix,suffix)
     if text=='' or available<=0 then return '' end
-    if text_extent(text,size)<=available then return text end
-    if text_extent('...',size)>available then return '' end
+    prefix,suffix=prefix or '',suffix or ''
+    local full=prefix..text..suffix
+    if text_extent(full,size)<=available then return full end
+    if text_extent(prefix..'...'..suffix,size)>available then return '' end
     local offsets={}
     for at in utf8.codes(text) do offsets[#offsets+1]=at end
     offsets[#offsets+1]=#text+1
     local lo,hi,best=0,#offsets-1,''
     while lo<=hi do
       local mid=math.floor((lo+hi)/2)
-      local candidate=text:sub(1,offsets[mid+1]-1)..'...'
+      local candidate=prefix..text:sub(1,offsets[mid+1]-1)..'...'..suffix
       if text_extent(candidate,size)<=available then best=candidate; lo=mid+1 else hi=mid-1 end
     end
     return best
+  end
+  local reserved=inside and health.text~='' and math.min(width/2,text_extent(health.text,bar_font)+gap*2) or 0
+  local name_width=inside and math.max(0,width-reserved-gap*2) or width
+  local prefix,suffix=clean(get(style,'name_prefix'),16),clean(get(style,'name_suffix'),16)
+  local fallback_badge
+  if show_name and (prefix~='' or suffix~='') then
+    local decorated=fit(name,fs,name_width,prefix,suffix)
+    if decorated~='' then name=decorated else fallback_badge=get(style,'name_fallback_badge') end
   end
   local commands,total={},nil
   local function emit(c,b)
@@ -251,13 +261,20 @@ function R.prepare(style,context,metrics)
   local badge_font=clamp(tag_font*badge_scale,4,256,14)
   local column_width=0
   for i=1,R.MAX_BADGES do
-    local b=get(get(style,'badges'),i)
+    local b=i==1 and fallback_badge or get(get(style,'badges'),i-(fallback_badge and 1 or 0))
     if type(b)~='table' then break end
     local text=clean(get(b,'label'),48)
-    local available=math.max(0,badge_limit-badge_size-badge_gap*3)
-    local label_width=math.min(text_extent(text,badge_font),available)
-    local bw=math.min(badge_limit,badge_size+badge_gap*2+(text~='' and label_width+badge_gap or 0))
-    badges[#badges+1]={data=b,text=text,width=bw,x=0,y=0}; column_width=math.max(column_width,bw)
+    local icon_width=get(b,'text_only')==true and 0 or badge_size
+    local padding=badge_gap*(icon_width>0 and 3 or 2)
+    local available=math.max(0,badge_limit-icon_width-padding)
+    local extent=text_extent(text,badge_font)
+    local size=badge_font
+    if icon_width==0 and extent>available then size=math.max(4,badge_font*available/extent) end
+    local label_width=math.min(text_extent(text,size),available)
+    if text=='' then padding=badge_gap*2 end
+    local bw=math.min(badge_limit,icon_width+padding+label_width)
+    badges[#badges+1]={data=b,text=text,width=bw,font_size=size,icon_width=icon_width,x=0,y=0}
+    column_width=math.max(column_width,bw)
   end
   if not health and not mana and not cast and not show_name and subtitle=='' and #badges==0 then
     return {hide=true,bounds=box(0,0,0,0),commands={},clickable=false}
@@ -331,9 +348,9 @@ function R.prepare(style,context,metrics)
         end
       end
     end
-    if not drawn then icon(get(b.data,'icon'),cx,by_center,badge_size*0.35,rgb) end
-    local label_x=bx+badge_size+badge_gap*2
-    label(b.text,label_x,by+(badge_size-badge_font)/2,badge_font,math.max(0,bx+b.width-badge_gap-label_x),'left',rgb,false)
+    if not drawn and b.icon_width>0 then icon(get(b.data,'icon'),cx,by_center,badge_size*0.35,rgb) end
+    local label_x=bx+badge_gap+(b.icon_width>0 and b.icon_width+badge_gap or 0)
+    label(b.text,label_x,by+(badge_size-b.font_size)/2,b.font_size,math.max(0,bx+b.width-badge_gap-label_x),'left',rgb,false)
   end
   local function fill(x0,y0,x1,y1,rgb,rounding)
     if x1<=x0 or y1<=y0 then return end
@@ -410,17 +427,17 @@ function R.prepare(style,context,metrics)
     elseif edge>0 then rect(x0+edge/2,yy+edge/2,x1-edge/2,y1-edge/2,border,nil,rounding,edge) end
     if primary and target then target_trim(x0,yy,x1,y1,rounding) end
     local label_x,label_width=x0+gap,w-gap*2
-    local reserved=inside and is_health and value.text~='' and math.min(w/2,text_extent(value.text,bar_font)+gap*2) or 0
-    if reserved>0 then
-      label_width=reserved-gap
-      label_x=health_align=='left' and x0+gap or x1-reserved
+    local bar_reserved=is_health and reserved or 0
+    if bar_reserved>0 then
+      label_width=bar_reserved-gap
+      label_x=health_align=='left' and x0+gap or x1-bar_reserved
     end
     local th,above=text_height(value.text,bar_font)
     label(value.text,label_x,yy+(h-th)/2-above,bar_font,label_width,align,foreground,true)
     if inside and is_health then
       local nx=health_align=='left' and x0+reserved+gap or x0+gap
       local nh,name_above=text_height(name,fs)
-      label(name,nx,yy+(h-nh)/2-name_above,fs,math.max(0,w-reserved-gap*2),text_align,foreground,true)
+      label(name,nx,yy+(h-nh)/2-name_above,fs,name_width,text_align,foreground,true)
     end
   end
   draw_bar(health,hy,hh,width,health_align,true,true)

@@ -5,7 +5,8 @@
 local M = {}
 
 local AWARENESS_OPCODE, MARKER_OPCODE = 0x7d1d, 0x7d1c
-local AWARENESS_MAGIC, STATUS_MAGIC, MARKER_MAGIC = 0x4e504131, 0x4e505331, 0x4e504d31
+local MARKER_MAGIC = 0x4e504d31
+local snapshot_streams = { [0x4e504131] = 'awareness', [0x4e505331] = 'status', [0x4e504331] = 'concealment' }
 local TTL, MAX_ENTRIES, MAX_CHUNKS, MAX_CHUNK_ENTRIES = 5000, 1024, 9, 122
 local U32 = 4294967296
 local icons = { "star", "sun", "moon", "diamond", "triangle", "cross", "skull", "sword" }
@@ -50,7 +51,8 @@ function M.new()
 end
 
 function Decoder:reset()
-    self.awareness, self.status = stream(), stream()
+    self.snapshots = {}
+    for _, name in pairs(snapshot_streams) do self.snapshots[name] = stream() end
     self.marks = { {}, {} }
     self.last_time = nil
 end
@@ -61,7 +63,7 @@ function Decoder:_advance(now)
     if not valid_time(now) then return false end
     if self.last_time and now < self.last_time then self:reset() end
     self.last_time = now
-    for _, state in ipairs({ self.awareness, self.status }) do
+    for _, state in pairs(self.snapshots) do
         if state.received_at and now - state.received_at > TTL then
             state.entries, state.count = {}, 0
             state.generation, state.received_at = nil, nil
@@ -75,8 +77,8 @@ end
 
 local function parse_snapshot(bytes)
     if #bytes < 16 or #bytes > 504 then return nil end
-    local magic = u32(bytes, 1)
-    if magic ~= AWARENESS_MAGIC and magic ~= STATUS_MAGIC then return nil end
+    local name = snapshot_streams[u32(bytes, 1)]
+    if not name then return nil end
     local version, flags = bytes:byte(5, 6)
     local count, generation = u16(bytes, 7), u32(bytes, 9)
     local index, chunks = u16(bytes, 13), u16(bytes, 15)
@@ -96,7 +98,7 @@ local function parse_snapshot(bytes)
         entries[id] = entry_flags
     end
     return {
-        magic = magic, count = count, generation = generation,
+        stream = name, count = count, generation = generation,
         index = index, chunks = chunks, entries = entries,
     }
 end
@@ -181,7 +183,7 @@ function Decoder:receive(opcode, bytes, now_ms)
     if opcode == AWARENESS_OPCODE then
         local chunk = parse_snapshot(bytes)
         if not chunk or not self:_advance(now_ms) then return false end
-        return accept_snapshot(chunk.magic == AWARENESS_MAGIC and self.awareness or self.status, chunk, now_ms)
+        return accept_snapshot(self.snapshots[chunk.stream], chunk, now_ms)
     elseif opcode == MARKER_OPCODE then
         local marker = parse_marker(bytes)
         if not marker or not self:_advance(now_ms) then return false end
@@ -210,13 +212,13 @@ function Decoder:badges(spawn_id, now_ms, in_raid)
             break
         end
     end
-    local awareness = self.awareness.entries[spawn_id]
+    local awareness = self.snapshots.awareness.entries[spawn_id]
     if awareness then
         result[#result + 1] = {
             icon = "eye", label = awareness == 2 and "Engaged" or "Detects you", color = 0xffc857,
         }
     end
-    local status = self.status.entries[spawn_id]
+    local status = self.snapshots.status.entries[spawn_id]
     if status == 1 or status == 3 then
         result[#result + 1] = { icon = "sleep", label = "Mezzed", color = 0xd89bff }
     end
@@ -226,9 +228,14 @@ function Decoder:badges(spawn_id, now_ms, in_raid)
     return result
 end
 
+function Decoder:concealment(spawn_id, now_ms)
+    if not self:_advance(now_ms) or not integer(spawn_id, 1, 65535) then return nil end
+    return self.snapshots.concealment.entries[spawn_id]
+end
+
 function Decoder:remove(id)
     if not integer(id, 1, U32 - 1) then return end
-    for _, state in ipairs({ self.awareness, self.status }) do
+    for _, state in pairs(self.snapshots) do
         if state.entries[id] then
             state.entries[id] = nil
             state.count = state.count - 1
@@ -259,7 +266,8 @@ function Decoder:diagnostics(now_ms)
     for scope = 1, 2 do
         for icon = 1, 8 do if self.marks[scope][icon] then marks[scope] = marks[scope] + 1 end end
     end
-    return { awareness = describe(self.awareness), status = describe(self.status), group_marks = marks[1], raid_marks = marks[2] }
+    return { awareness = describe(self.snapshots.awareness), status = describe(self.snapshots.status),
+        concealment = describe(self.snapshots.concealment), group_marks = marks[1], raid_marks = marks[2] }
 end
 
 return M

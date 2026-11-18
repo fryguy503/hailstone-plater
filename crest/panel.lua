@@ -54,7 +54,10 @@ function M.new(ui,app)
               if section[1]=='bars' then ui.TextWrapped('Remote HP is a percentage. Mana and endurance appear only when the server supplies them. Actual HP labels apply to yourself.') end
               if section[1]=='general' then ui.TextWrapped('Clicking plates targets the unit with a normal left click. Dragging or interacting with other windows does not target a plate. Show through walls is an explicit display option; invisibility and server targeting rules still apply.') end
               if section[1]=='casts' then ui.TextWrapped('Casts use observed server events. A cast bar does not imply that a spell can be interrupted.') end
-              if section[1]=='indicators' then ui.TextWrapped('The eye means an NPC detects your current concealment or is already engaged. Pacify, mez and shared symbols require matching server support. Status expires after five seconds without a complete refresh.') end
+              if section[1]=='indicators' then
+                ui.TextWrapped('INV means invisible, IVU means invisible to undead, and HID means the concealment type is unknown. Tags follow Indicator placement under Texture, anchors & stacking.')
+                ui.TextWrapped('The eye means an NPC detects your current concealment or is already engaged. Pacify, mez and shared symbols require matching server support. Status expires after five seconds without a complete refresh.')
+              end
               if section[1]=='auras' then ui.TextWrapped('Aura badges use known self or current-target buffs only. Servers may restrict target buff inspection. Whitelist matches literal names or name fragments.') end
               if section[1]=='colors' then ui.TextDisabled('Click a color swatch for the hue wheel, RGB values, hexadecimal input and quick colors.') end
               for _,d in ipairs(C.schema) do

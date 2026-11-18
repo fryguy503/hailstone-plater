@@ -75,6 +75,25 @@ local function signature(model)
   return table.concat(values,';')
 end
 
+test('name decoration survives narrow layouts and suffixes fall back to a text-only tag',function()
+  local s=style()
+  s.name_prefix,s.name_suffix='(',')'
+  s.width=66
+  local p=prepare(s)
+  local wrapped=false
+  for _,c in ipairs(p.commands) do
+    if c.kind=='Text' and c.color==s.text_color and c.text:match('^%(.+%.%.%.%)$') then wrapped=true end
+  end
+  check(wrapped)
+  s.name_prefix,s.name_suffix=nil,' [INV+IVU]'
+  s.name_fallback_badge={text_only=true,label='INV+IVU',color=0xffd989}
+  s.name_position='inside'; s.width=40; s.badges={}
+  p=prepare(s)
+  verify(p)
+  equal(#texts(p,'INV+IVU'),1)
+  for _,c in ipairs(p.commands) do check(c.kind~='Circle' and c.kind~='CircleFilled') end
+end)
+
 test('native fallback, explicit hiding and metric failures are transactional',function()
   equal(R.prepare(nil,context,metrics),nil)
   equal(R.prepare(false,context,metrics),nil)

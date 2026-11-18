@@ -234,6 +234,7 @@ local function canvas_frame(frame)
         current_hp=player.cur_hp,max_hp=player.max_hp,
         remote_mana=remote_mana,remote_endurance=remote_endurance,
         server_indicators=server_indicators:badges(spawn.id,time,player.in_raid==true),
+        npc_concealment=spawn.npc and not spawn.corpse and server_indicators:concealment(spawn.id,time) or nil,
         auras=auras and auras.name==spawn.name and (ctx.self or ctx.target) and
           mq.TLO.Spawn(spawn.id).BuffsPopulated()==true and auras.badges or nil}
       local cached=con_by_id[spawn.id]
@@ -319,7 +320,7 @@ panel=Panel.new(ui,{
     store.profiles[name]=C.repair(store.settings); changed(); return 'Saved '..name..'.'
   end,
   status=function()
-    local lines={'Crest 0.3.0-preview.1',
+    local lines={'Crest 0.3.0-preview.2',
       loaded_path and 'Character settings loaded.' or 'Waiting for a character in a zone.',
       stats.last_packet>0 and 'Optional indicators are receiving supported data.' or 'Optional indicators are waiting for supported data.',
       'HP / mana / casts / auras reflect only information supplied by your server.'}
