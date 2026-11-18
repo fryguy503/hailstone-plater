@@ -423,6 +423,16 @@ test('concealment tags use observed types and clear with the NPC snapshot',funct
   local p=r:plate(2,{invisible=true})
   equal(p.name_prefix,'('); equal(p.name_suffix,')'); equal(p.badges[1].label,'INV+IVU')
   local s=r.app.settings()
+  s.concealment_display='Parentheses only'; r.app.changed()
+  p=r:plate(2); equal(p.name_prefix,'('); equal(p.name_suffix,')'); equal(#p.badges,0)
+  local wrapped=false
+  for _,command in ipairs(r.models[1].commands) do
+    if command.kind=='Text' then
+      if command.text=='(Guardian)' then wrapped=true end
+      check(command.text~='INV+IVU')
+    end
+  end
+  check(wrapped)
   s.concealment_display='Tags'; r.app.changed()
   p=r:plate(2); equal(p.name_prefix,nil); equal(p.badges[1].label,'INV+IVU')
   s.concealment_display='Name suffix'; r.app.changed()

@@ -28,7 +28,7 @@ Tank, Healer, Large, Cast Focus, Raid and Classic Names provide six additional r
 - **Click plates to target** starts enabled. A real left click selects the displayed unit; dragging, open UI windows, cursor items and invalid/deleted units keep their normal input protections. Right clicks do not attack or activate the unit through Crest.
 - **Show plates through walls** starts disabled. When enabled, it permits displaying and manually selecting otherwise occluded plates. Invisible/hidden actors, host name switches, distance/frustum limits and the server's spell/action rules still apply.
 - Every color has a visible swatch. Click it for a hue wheel, RGB inputs, hexadecimal entry and quick colors. Changes are visible immediately.
-- Under **Indicators**, set **Concealment display** to **Parentheses + tags** (default), **Tags**, **Name suffix**, or **Off**. Tags use the configured indicator placement and scale. For example, a name suffix can read `Crypt Guardian [IVU]`.
+- Under **Indicators**, set **Concealment display** to **Parentheses + tags** (default), **Parentheses only**, **Tags**, **Name suffix**, or **Off**. Tags use the configured indicator placement and scale. **Parentheses only** displays names such as `(Crypt Guardian)` for any known type of concealment.
 - Settings cover per-unit appearances, combat/rest/target styling, health/mana/endurance, cast timing, known auras, numeric/shared marks, low-health and aggro emphasis, bounded stacking, a personal resource window, literal name rules and profile import/export.
 
 Settings are kept separately per server/world/character. Up to sixteen named profiles and sixty-four ordered literal name rules are supported. Profile imports are bounded data, not executable scripts. In crowded frames, Crest prioritizes the target and nearer plates and skips overflow to stay within Hailstone's Lua callback limit.
@@ -61,7 +61,7 @@ Build the add-on with Hailstone’s official packager:
 python tools/package.py --client-source <compatible-hailstone-source> --lua lua
 ```
 
-The package is a managed Lua add-on (`autoload 1`) using the reusable `hailstone.nameplates` service. It submits generic drawing primitives; the host contains no Crest bar, skin, preset or stacking recipes. Output goes into `release/0.3.0-preview.2/` so earlier previews remain separate. `tools/verify_package.py` verifies the add-on archive and source bytes without a client bundle.
+The package is a managed Lua add-on (`autoload 1`) using the reusable `hailstone.nameplates` service. It submits generic drawing primitives; the host contains no Crest bar, skin, preset or stacking recipes. Output goes into `release/0.3.0-preview.3/` so earlier previews remain separate. `tools/verify_package.py` verifies the add-on archive and source bytes without a client bundle.
 
 The optional `tools/preview.cpp` evaluates the actual shipped presets through Crest’s engine and renderer with Lua and Dear ImGui, then writes an offline comparison image. It uses no private client headers or client engine library.
 

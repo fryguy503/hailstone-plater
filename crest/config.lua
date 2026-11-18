@@ -82,7 +82,7 @@ M.schema = {
   {"casts", "highlight_cast", "Highlight casting plates", "bool", true},
   {"indicators", "target_marker", "Target arrow", "bool", true},
   {"indicators", "stock_marks", "Group / raid numeric marks", "bool", true},
-  {"indicators", "concealment_display", "Concealment display", "enum", "Parentheses + tags", {"Parentheses + tags", "Tags", "Name suffix", "Off"}},
+  {"indicators", "concealment_display", "Concealment display", "enum", "Parentheses + tags", {"Parentheses + tags", "Parentheses only", "Tags", "Name suffix", "Off"}},
   {"indicators", "server_indicators_awareness", "Concealment awareness eye", "bool", true},
   {"indicators", "server_indicators_status", "Pacify and mez icons", "bool", true},
   {"indicators", "server_indicators_marks", "Shared marker symbols", "bool", true},

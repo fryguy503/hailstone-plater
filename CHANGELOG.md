@@ -1,5 +1,9 @@
 # Changes
 
+## 0.3.0-preview.3
+
+- Added **Parentheses only** for the classic concealment cue without a type tag.
+
 ## 0.3.0-preview.2
 
 - Added configurable concealment tags for regular invisibility, invisibility to undead, both, and unknown concealment. Choose tags, parentheses with tags, a name suffix, or off.

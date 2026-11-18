@@ -151,11 +151,11 @@ function M:presentation(spawn,ctx,s,extra)
     local flags=extra.npc_concealment or ((ctx.invisible==true and 1 or 0)+(ctx.invisible_undead==true and 2 or 0))
     local tag=concealment_tags[flags] or (ctx.concealed==true and concealment_tags[4])
     if tag then
+      if display=='Parentheses only' or display=='Parentheses + tags' then p.name_prefix,p.name_suffix='(',')' end
       if display=='Name suffix' and p.show_name and p.name~='' then
         p.name_suffix=' ['..tag.label..']'
         p.name_fallback_badge=tag
-      else
-        if display=='Parentheses + tags' then p.name_prefix,p.name_suffix='(',')' end
+      elseif display~='Parentheses only' then
         badge(tag)
       end
     end
