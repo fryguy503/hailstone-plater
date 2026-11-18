@@ -4,6 +4,7 @@
 
 - Added configurable concealment tags for regular invisibility, invisibility to undead, both, and unknown concealment. Choose tags, parentheses with tags, a name suffix, or off.
 - Read known concealment from Hailstone's nameplate context and exact NPC invisibility types from compatible servers.
+- Give the current target and nearby plates priority in crowded scenes, with time limits on plate preparation and stacking. Reuse text measurements within a frame and consider colors across NPCs of the same level.
 
 ## 0.3.0-preview.1
 

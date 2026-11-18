@@ -31,7 +31,7 @@ Tank, Healer, Large, Cast Focus, Raid and Classic Names provide six additional r
 - Under **Indicators**, set **Concealment display** to **Parentheses + tags** (default), **Tags**, **Name suffix**, or **Off**. Tags use the configured indicator placement and scale. For example, a name suffix can read `Crypt Guardian [IVU]`.
 - Settings cover per-unit appearances, combat/rest/target styling, health/mana/endurance, cast timing, known auras, numeric/shared marks, low-health and aggro emphasis, bounded stacking, a personal resource window, literal name rules and profile import/export.
 
-Settings are kept separately per server/world/character. Up to sixteen named profiles and sixty-four ordered literal name rules are supported. Profile imports are bounded data, not executable scripts.
+Settings are kept separately per server/world/character. Up to sixteen named profiles and sixty-four ordered literal name rules are supported. Profile imports are bounded data, not executable scripts. In crowded frames, Crest prioritizes the target and nearer plates and skips overflow to stay within Hailstone's Lua callback limit.
 
 ## Managed add-on behavior
 

@@ -287,7 +287,7 @@ local function runtime(options)
     local buffs=state.buffs[id]
     return {
       Name=function() return state.spawn_name or 'Guardian' end,
-      ConColor=function() return state.con_color or 'BLUE' end,
+      ConColor=function() state.con_reads=(state.con_reads or 0)+1; return state.con_color or 'BLUE' end,
       BuffsPopulated=function() return buffs~=nil end,
       BuffCount=function() check(buffs~=nil,'unknown buffs were inspected'); return #buffs end,
       Buff=function(index)
@@ -902,6 +902,34 @@ test('aggregate command and geometry budgets prioritize targets and explicitly h
     equal(admitted,case.admitted); check(commands<=Renderer.MAX_FRAME_COMMANDS); check(vertices<=Renderer.MAX_FRAME_VERTICES)
     r:stop()
   end
+end)
+
+test('elapsed canvas budget protects the target and nearest plates without preparing overflow',function()
+  local r,prepared
+  local renderer=setmetatable({prepare=function(style,context,metrics)
+    prepared=prepared+1
+    r.time=r.time+8
+    return Renderer.prepare(style,context,metrics)
+  end},{__index=Renderer})
+  r=runtime{renderer=renderer}
+  prepared=0
+  local models=r:canvas({candidate(2,false),candidate(3,false),candidate(4,false),candidate(5,true)})
+  equal(prepared,2)
+  check(not models[4].hide,'target was dropped despite being first priority')
+  check(not models[1].hide,'nearest plate was dropped')
+  check(models[2].hide and models[3].hide,'overflow unexpectedly drew or fell back to stock')
+  r:stop()
+end)
+
+test('consider colors share a lookup by NPC level and refresh on a player level change',function()
+  local r=runtime{prepare=function(s) s.player.level=65 end}
+  equal(r:plate(2).health.color,0x6599ef)
+  equal(r:plate(3).health.color,0x6599ef)
+  equal(r.con_reads,1)
+  r.player.level=66; r.con_color='GREEN'; r:step()
+  equal(r:plate(2).health.color,0x58d07d)
+  equal(r.con_reads,2)
+  r:stop()
 end)
 
 test('a fresh exact pool received before the first replacement frame survives identity validation',function()

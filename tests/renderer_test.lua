@@ -127,6 +127,29 @@ test('glyph ink, text shadow and positive vertical offset fit exact measured bou
   for _,key in ipairs({'x','y','w','h'}) do near(sum[key],p.bounds[key]) end
 end)
 
+test('frame metrics reuse validated text measurements and emit the same canvas primitives',function()
+  local calls=0
+  local frame_metrics={measurement_cache={},omit_command_bounds=true,measure=function(text,size)
+    calls=calls+1
+    return measure(text,size)
+  end}
+  local p=prepare(nil,nil,frame_metrics)
+  check(calls>0)
+  local first_calls=calls
+  local repeat_plate=prepare(nil,nil,frame_metrics)
+  equal(calls,first_calls)
+  local diagnostic_plate=prepare()
+  equal(signature(p),signature(diagnostic_plate))
+  equal(signature(p),signature(repeat_plate))
+  for _,key in ipairs({'x','y','w','h'}) do near(p.bounds[key],diagnostic_plate.bounds[key]) end
+  equal(p.vertex_cost,R.vertex_cost(p.commands))
+  for _,command in ipairs(p.commands) do equal(command.bounds,nil) end
+  local other_font=copy(context); other_font.font=4
+  prepare(nil,other_font,frame_metrics)
+  equal(calls,first_calls*2)
+  verify(p)
+end)
+
 test('all fourteen shipped presets render through the same addon painter',function()
   equal(#C.presets,14)
   for _,name in ipairs(C.presets) do
@@ -321,6 +344,22 @@ test('stacking caps movable candidates, rejects stale geometry and restores per-
   R.stack({{x=0/0,y=5,model=stacked_model()},false},viewport)
   local bad={x=400,y=400,model={bounds={x=0,y=0,w=math.huge,h=1}}}
   R.stack({bad},viewport); check(bad.hidden)
+end)
+
+test('stacking deadline hides the unprocessed plates and preserves admitted priority',function()
+  local records={{id=4,x=400,y=400,depth=20,model=stacked_model()},
+    {id=2,x=400,y=400,depth=2,model=stacked_model()},
+    {id=1,x=400,y=400,depth=1,target=true,model=stacked_model()},
+    {id=3,x=400,y=400,depth=10,model=stacked_model()}}
+  local checked=0
+  R.stack(records,viewport,function()
+    checked=checked+1
+    return checked>1
+  end)
+  equal(checked,2)
+  check(records[1].hidden); check(records[4].hidden)
+  check(not records[2].hidden); near(records[2].offset_y,-24)
+  check(not records[3].hidden); equal(records[3].offset_y,0)
 end)
 
 print(string.format('Addon renderer: %d tests, %d assertions passed',tests,assertions))

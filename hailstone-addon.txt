@@ -7,4 +7,4 @@ min_client 0.7.1-beta
 author Fryguy
 description Configurable world health, resource and cast plates with optional server status icons.
 caps read,commands,ui,extend,packets
-package any 61356 1b708368d400c5cfc08652609eaf70a31e2df9ef73a03f6d588cc02b9f6d1949 crest-0.3.0-preview.2.zip
+package any 61728 e3db979cecf6f876f71caa5ef1393dacd1b4933ba0b4196adea516bf8d5bf122 crest-0.3.0-preview.2.zip

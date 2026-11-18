@@ -13,7 +13,7 @@ local engine,server_indicators=Engine.new(),Server.new()
 local resources,tracked_resources=Resources.new(),{}
 local store=C.store()
 local player,loaded_path,world_key,dirty_at=nil,nil,nil,nil
-local aura_by_id,con_by_id,con_count={},{},0
+local aura_by_id,con_by_level,con_player_level={},{},nil
 local incarnations,incarnation_count={},0
 local running,combat=true,false
 local stats={plates=0,last_packet=0,packets=0,error=nil}
@@ -58,13 +58,12 @@ end
 local function replace(settings) store.settings=C.repair(settings); changed() end
 local function reset_world()
   server_indicators:reset(); engine:reset(); resources:reset(); tracked_resources={}
-  aura_by_id={}; con_by_id={}; con_count=0; stats.plates=0; stats.last_packet=0; stats.packets=0
+  aura_by_id={}; con_by_level={}; con_player_level=nil; stats.plates=0; stats.last_packet=0; stats.packets=0
   incarnations={}; incarnation_count=0
 end
 local function forget_actor(id)
   server_indicators:remove(id); engine:remove(id); resources:remove(id)
   tracked_resources[id]=nil; aura_by_id[id]=nil
-  if con_by_id[id] then con_by_id[id]=nil; con_count=con_count-1 end
 end
 local function observe_incarnation(spawn)
   local id,value=spawn.id,spawn.incarnation
@@ -133,6 +132,18 @@ local function refresh_resources()
   resources:prune(tracked)
 end
 local con_colors={GREY=0x999999,GREEN=0x58d07d,['LIGHT BLUE']=0x6ecfe4,BLUE=0x6599ef,WHITE=0xeeeeee,YELLOW=0xf1d85a,RED=0xf16b67}
+local function con_color(spawn)
+  local own_level,level=player.level,spawn.level
+  if con_player_level~=own_level then con_by_level={}; con_player_level=own_level end
+  if C.finite(own_level) and own_level>0 and C.finite(level) and level>=1 and level<=255 and level%1==0 then
+    local color=con_by_level[level]
+    if color then return color end
+    color=con_colors[mq.TLO.Spawn(spawn.id).ConColor()]
+    con_by_level[level]=color
+    return color
+  end
+  return con_colors[mq.TLO.Spawn(spawn.id).ConColor()]
+end
 local function read_auras()
   aura_by_id={}
   local s=store.settings
@@ -200,13 +211,22 @@ hs.on_packet('zone','in',0x3791,receive_points)
 hs.on_packet('zone','in',0x5f42,receive_points)
 end)
 if not packet_ok then stats.packet_error='Optional server icons unavailable: '..C.text(tostring(packet_error),180) end
+-- Leave room under the host's 50 ms callback limit for stacking, output and
+-- scheduler variability. Preserve the target and nearest replacements first.
+local CANVAS_PREPARE_MS,CANVAS_STACK_MS=15,23
+local function plate_priority(a,b)
+  if a.target~=b.target then return a.target end
+  if a.depth~=b.depth then return a.depth<b.depth end
+  return a.id<b.id
+end
 local function canvas_frame(frame)
   -- Every token belongs to this callback/frame alone. Never keep an anchor or a
   -- borrowed spawn/context table beyond this call; retained caches hold scalars.
   if not running or not store.settings.enabled or not player or not player.in_zone or not loaded_path then return {} end
   if type(frame)~='table' or type(frame.candidates)~='table' then return {} end
-  local records={}
-  local metrics={measure=function(text,size,font)
+  local time=now()
+  local records,priority,rendered={},{},{}
+  local metrics={omit_command_bounds=true,measurement_cache={},measure=function(text,size,font)
     local value,height,x0,y0,x1,y1=nameplates.MeasureText(text,size,font)
     if type(value)=='table' then return value end
     if value~=nil then return {width=value,height=height,ink_x0=x0,ink_y0=y0,ink_x1=x1,ink_y1=y1} end
@@ -215,76 +235,63 @@ local function canvas_frame(frame)
     if type(value)=='table' then return value end
     if value~=nil then return {texture=value,u0=u0,v0=v0,u1=u1,v1=v1} end
   end}
-  local time=now()
+  local sorted=true
   for i=1,math.min(1024,#frame.candidates) do
     local candidate=frame.candidates[i]
     local spawn=type(candidate)=='table' and candidate.spawn
     local source=type(candidate)=='table' and candidate.context
-    if type(spawn)=='table' and type(source)=='table' and type(candidate.token)=='string' then
-      observe_incarnation(spawn)
-      local ctx={}
-      for k,v in pairs(source) do ctx[k]=v end
-      -- Smoothing and pruning share the addon's clock. The host's monotonic
-      -- frame clock can have a different epoch from mq.gettime().
-      ctx.now_ms=time
-      ctx.dt_ms=C.finite(frame.dt_ms) and frame.dt_ms or 0
-      local auras=aura_by_id[spawn.id]
-      local remote_mana,remote_endurance=resources:values(spawn.id,spawn.name)
-      local extra={has_target=player.target_id~=0,combat=combat,
-        current_hp=player.cur_hp,max_hp=player.max_hp,
-        remote_mana=remote_mana,remote_endurance=remote_endurance,
-        server_indicators=server_indicators:badges(spawn.id,time,player.in_raid==true),
-        npc_concealment=spawn.npc and not spawn.corpse and server_indicators:concealment(spawn.id,time) or nil,
-        auras=auras and auras.name==spawn.name and (ctx.self or ctx.target) and
-          mq.TLO.Spawn(spawn.id).BuffsPopulated()==true and auras.badges or nil}
-      local cached=con_by_id[spawn.id]
-      if not cached or cached.name~=spawn.name or time-cached.at>1000 then
-        cached={at=time,name=spawn.name,color=con_colors[mq.TLO.Spawn(spawn.id).ConColor()]}
-        if not con_by_id[spawn.id] then con_count=con_count+1 end
-        if con_count>1024 then con_by_id={}; con_count=1 end
-        con_by_id[spawn.id]=cached
-      end
-      extra.con_color=cached.color
-      stats.plates=stats.plates+1
-      local style=engine:presentation(spawn,ctx,store.settings,extra)
-      local model=Renderer.prepare(style,{name=ctx.name,target=ctx.target,font_size=frame.font_size,font=frame.font,
-        scale=candidate.native_scale,now_ms=ctx.now_ms},metrics)
-      if model then records[#records+1]={model=model,x=candidate.x,y=candidate.y,depth=candidate.depth,
-        id=spawn.id,target=ctx.target,token=candidate.token} end
+    if type(spawn)=='table' and C.finite(spawn.id) and type(source)=='table' and type(candidate.token)=='string' then
+      local record={candidate=candidate,x=candidate.x,y=candidate.y,
+        depth=C.finite(candidate.depth) and candidate.depth or math.huge,
+        id=spawn.id,target=source.target==true,token=candidate.token}
+      if sorted and #priority>0 and plate_priority(record,priority[#priority]) then sorted=false end
+      priority[#priority+1]=record
+      records[#records+1]=record
     end
   end
-  -- Admit the target and nearest plates first. Explicit hides retain caption
-  -- ownership for overflow instead of exceeding the public frame budget and
-  -- having the host reject an otherwise valid complete submission.
-  local priority={}
-  for _,record in ipairs(records) do priority[#priority+1]=record end
-  table.sort(priority,function(a,b)
-    if (a.target==true)~=(b.target==true) then return a.target==true end
-    if a.depth~=b.depth then return a.depth<b.depth end
-    return a.id<b.id
-  end)
+  if not sorted then table.sort(priority,plate_priority) end
   local remaining,vertices=Renderer.MAX_FRAME_COMMANDS,Renderer.MAX_FRAME_VERTICES
+  local settings=store.settings
+  local badges_enabled=settings.server_indicators_awareness or settings.server_indicators_status or settings.server_indicators_marks
   for _,record in ipairs(priority) do
-    local cost=#record.model.commands
-    local weight=Renderer.vertex_cost(record.model.commands)
-    if cost>remaining or weight>vertices then record.model={hide=true,bounds={x=0,y=0,w=0,h=0},commands={}}
-    else remaining=remaining-cost; vertices=vertices-weight end
+    if now()-time>=CANVAS_PREPARE_MS or remaining==0 or vertices==0 then
+      record.hide=true
+    else
+      local candidate=record.candidate
+      local spawn,ctx=candidate.spawn,candidate.context
+      observe_incarnation(spawn)
+      local auras=aura_by_id[spawn.id]
+      local remote_mana,remote_endurance=resources:values(spawn.id,spawn.name)
+      local extra={has_target=player.target_id~=0,combat=combat,now_ms=time,get_con_color=con_color,
+        current_hp=player.cur_hp,max_hp=player.max_hp,remote_mana=remote_mana,remote_endurance=remote_endurance,
+        server_indicators=badges_enabled and server_indicators:badges(spawn.id,time,player.in_raid==true) or nil,
+        npc_concealment=settings.concealment_display~='Off' and spawn.npc and not spawn.corpse and
+          server_indicators:concealment(spawn.id,time) or nil,
+        auras=auras and auras.name==spawn.name and (ctx.self or ctx.target) and
+          mq.TLO.Spawn(spawn.id).BuffsPopulated()==true and auras.badges or nil}
+      stats.plates=stats.plates+1
+      local style=engine:presentation(spawn,ctx,settings,extra)
+      local model=Renderer.prepare(style,{name=ctx.name,target=ctx.target,font_size=frame.font_size,font=frame.font,
+        scale=candidate.native_scale},metrics)
+      record.model=model
+      if model and not model.hide then
+        local cost=#model.commands
+        local weight=model.vertex_cost or Renderer.vertex_cost(model.commands)
+        if cost>remaining or weight>vertices then record.hide=true
+        else
+          remaining=remaining-cost; vertices=vertices-weight
+          rendered[#rendered+1]=record
+        end
+      end
+    end
   end
-  Renderer.stack(records,frame.viewport)
+  Renderer.stack(rendered,frame.viewport,function() return now()-time>=CANVAS_STACK_MS end)
   local models={}
   for _,record in ipairs(records) do
     local model=record.model
-    if record.hidden or model.hide then models[#models+1]={token=record.token,hide=true}
-    else
-      -- Only the generic public canvas fields leave Crest. The host knows no
-      -- health bars, skins, indicator types or stacking policy.
-      local commands={}
-      for _,command in ipairs(model.commands) do
-        local primitive={}
-        for k,v in pairs(command) do if k~='bounds' then primitive[k]=v end end
-        commands[#commands+1]=primitive
-      end
-      models[#models+1]={token=record.token,bounds=model.bounds,commands=commands,offset_y=record.offset_y,
+    if record.hide or record.hidden or (model and model.hide) then models[#models+1]={token=record.token,hide=true}
+    elseif model then
+      models[#models+1]={token=record.token,bounds=model.bounds,commands=model.commands,offset_y=record.offset_y,
         through_walls=model.through_walls,clickable=model.clickable}
     end
   end
@@ -354,7 +361,7 @@ local loop_ok,loop_error=xpcall(function() while running do
   refresh_resources()
   local time=now()
   engine:prune(time)
-  if time>=next_auras then read_auras(); con_by_id={}; con_count=0; next_auras=time+500 end
+  if time>=next_auras then read_auras(); next_auras=time+500 end
   if dirty_at and time-dirty_at>=1000 then save() end
   mq.delay(100)
 end end,function(why) return tostring(why) end)

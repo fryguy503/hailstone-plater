@@ -87,12 +87,14 @@ function M:presentation(spawn,ctx,s,extra)
     kind=='group' and s.group_color or (kind=='player' or kind=='self') and s.player_color or s.npc_color
   if s.color_mode=='class' then color=class_colors[spawn.class] or color
   elseif s.color_mode=='health' and hp then color=hp<50 and blend(0xf15260,0xecc55a,hp/50) or blend(0xecc55a,0x59d9a0,(hp-50)/50)
-  elseif s.color_mode=='consider' and kind=='npc' and C.finite(extra.con_color) then color=extra.con_color
+  elseif s.color_mode=='consider' and kind=='npc' then
+    local con=extra.con_color or (extra.get_con_color and extra.get_con_color(spawn))
+    if C.finite(con) then color=con end
   elseif s.color_mode=='custom' then color=s.npc_color end
   if hp and s.low_health_color and hp<=s.low_health then color=s.low_color end
   if rule then color=rule.color end
   if not rule and s.unit_color then color=s.unit_color end
-  local now=ctx.now_ms or 0
+  local now=extra.now_ms or ctx.now_ms or 0
   local alpha=s.alpha*(extra.has_target and not targeted and s.non_target_alpha or 1)
   if s.distance_fade and not targeted then alpha=alpha*(1-0.65*math.max(0,(distance/s.max_distance-0.65)/0.35)) end
   local p={name=C.text(trim_name(s.short_names and name or C.text(ctx.name or name,256),math.floor(s.max_name)),256),

@@ -30,14 +30,10 @@ local function tone(rgb,factor)
   return (channel(16)<<16)|(channel(8)<<8)|channel(0)
 end
 local function box(x0,y0,x1,y1) return {x=x0,y=y0,w=math.max(0,x1-x0),h=math.max(0,y1-y0)} end
-local function union(a,b)
-  if not a then return box(b.x,b.y,b.x+b.w,b.y+b.h) end
-  return box(math.min(a.x,b.x),math.min(a.y,b.y),math.max(a.x+a.w,b.x+b.w),math.max(a.y+a.h,b.y+b.h))
-end
-local function translate(c,dx,dy)
-  for _,key in ipairs({'x','x0','x1','x2'}) do if c[key] then c[key]=c[key]+dx end end
-  for _,key in ipairs({'y','y0','y1','y2'}) do if c[key] then c[key]=c[key]+dy end end
-  c.bounds.x=c.bounds.x+dx; c.bounds.y=c.bounds.y+dy
+local function translate_y(c,dy)
+  if c.y then c.y=c.y+dy else c.y0=c.y0+dy; c.y1=c.y1+dy end
+  if c.y2 then c.y2=c.y2+dy end
+  if c.bounds then c.bounds.y=c.bounds.y+dy end
 end
 local function bar(value)
   if type(value)~='table' or not finite(get(value,'value')) then return nil end
@@ -65,13 +61,15 @@ end
 -- ink_x0/ink_y0/ink_x1/ink_y1 relative to the text origin. Missing ink metrics
 -- use the nominal box; adapters with actual glyph overhang must supply them.
 -- metrics.texture(spellIcon) returns {texture,u0,v0,u1,v1}, or nil for vector art.
+-- metrics.measurement_cache is an optional shared table for one frame.
+-- metrics.omit_command_bounds skips the diagnostic bounds on each primitive.
 -- context.scale is the host's distance/UI factor; style.scale is Crest's scale.
 -- Commands are relative to the projected head. Positive style.offset_y raises
 -- the plate. Bounds include font ink, shadows, strokes and antialias fringes.
 function R.prepare(style,context,metrics)
   if style==nil then return nil end -- absence means the ordinary host caption
   if type(style)~='table' then return nil,'invalid style' end
-  if get(style,'hide')==true then return {hide=true,bounds=box(0,0,0,0),commands={},clickable=false} end
+  if get(style,'hide')==true then return {hide=true,bounds=box(0,0,0,0),commands={},vertex_cost=0,clickable=false} end
   context=type(context)=='table' and context or {}
   metrics=type(metrics)=='table' and metrics or {}
   local measure=get(metrics,'measure')
@@ -105,11 +103,19 @@ function R.prepare(style,context,metrics)
   local subtitle=clean(get(style,'subtitle'),256)
   local show_name=get(style,'show_name')~=false and name~=''
   local inside=show_name and name_position=='inside' and health~=nil
-  local error_message,cache
-  cache={}
+  local error_message
+  local shared_cache=get(metrics,'measurement_cache')
+  local cache
+  if type(shared_cache)=='table' then
+    local font_key=font
+    if font==nil or font~=font then font_key=false end
+    cache=shared_cache[font_key] or {}
+    shared_cache[font_key]=cache
+  else cache={} end
   local function measured(text,size)
-    local key=tostring(size)..'\0'..text
-    if cache[key] then return cache[key] end
+    local by_text=cache[size]
+    if not by_text then by_text={}; cache[size]=by_text end
+    if by_text[text] then return by_text[text] end
     local ok,m=pcall(measure,text,size,font)
     if not ok or type(m)~='table' then error_message='font measurement failed'; return {width=0,height=size,ink_x0=0,ink_y0=0,ink_x1=0,ink_y1=size} end
     local w,h=get(m,'width'),get(m,'height')
@@ -122,7 +128,8 @@ function R.prepare(style,context,metrics)
       if not finite(result[keyname]) or math.abs(result[keyname])>131072 then error_message='invalid font ink'; result[keyname]=0 end
     end
     if result.ink_x1<result.ink_x0 or result.ink_y1<result.ink_y0 then error_message='invalid font ink' end
-    cache[key]=result; return result
+    if not error_message then by_text[text]=result end
+    return result
   end
   local function text_extent(text,size)
     local m=measured(text,size)
@@ -157,34 +164,39 @@ function R.prepare(style,context,metrics)
     local decorated=fit(name,fs,name_width,prefix,suffix)
     if decorated~='' then name=decorated else fallback_badge=get(style,'name_fallback_badge') end
   end
-  local commands,total={},nil
-  local function emit(c,b)
+  local commands={}
+  local left,top,right,bottom=math.huge,math.huge,-math.huge,-math.huge
+  local command_bounds=get(metrics,'omit_command_bounds')~=true
+  local function emit(c,x0,y0,x1,y1)
     if (c.alpha or alpha)<=0 then return end
     if #commands>=R.MAX_COMMANDS then error_message='primitive budget exceeded'; return end
-    c.color=c.color or foreground; c.alpha=c.alpha or alpha; c.bounds=b
-    commands[#commands+1]=c; total=union(total,b)
+    c.color=c.color or foreground; c.alpha=c.alpha or alpha
+    if command_bounds then c.bounds=box(x0,y0,x1,y1) end
+    commands[#commands+1]=c
+    left,top,right,bottom=math.min(left,x0),math.min(top,y0),math.max(right,x1),math.max(bottom,y1)
   end
   local function rect(x0,y0,x1,y1,rgb,opacity,rounding,thickness)
     if x1<=x0 or y1<=y0 then return end
     if thickness then thickness=clamp(thickness,0.01,64,1) end
     local stroke=thickness or 0; local fringe=1+stroke*0.5
     emit({kind=thickness and 'Rect' or 'RectFilled',x0=x0,y0=y0,x1=x1,y1=y1,
-      color=rgb,alpha=opacity,rounding=rounding or 0,thickness=thickness},box(x0-fringe,y0-fringe,x1+fringe,y1+fringe))
+      color=rgb,alpha=opacity,rounding=rounding or 0,thickness=thickness},x0-fringe,y0-fringe,x1+fringe,y1+fringe)
   end
   local function line(x0,y0,x1,y1,rgb,thickness,opacity)
     thickness=clamp(thickness,0.01,64,1)
     local fringe=1+thickness*0.5
     emit({kind='Line',x0=x0,y0=y0,x1=x1,y1=y1,color=rgb,alpha=opacity,thickness=thickness},
-      box(math.min(x0,x1)-fringe,math.min(y0,y1)-fringe,math.max(x0,x1)+fringe,math.max(y0,y1)+fringe))
+      math.min(x0,x1)-fringe,math.min(y0,y1)-fringe,math.max(x0,x1)+fringe,math.max(y0,y1)+fringe)
   end
   local function triangle(x0,y0,x1,y1,x2,y2,rgb,opacity)
     emit({kind='TriangleFilled',x0=x0,y0=y0,x1=x1,y1=y1,x2=x2,y2=y2,color=rgb,alpha=opacity},
-      box(math.min(x0,x1,x2)-1,math.min(y0,y1,y2)-1,math.max(x0,x1,x2)+1,math.max(y0,y1,y2)+1))
+      math.min(x0,x1,x2)-1,math.min(y0,y1,y2)-1,math.max(x0,x1,x2)+1,math.max(y0,y1,y2)+1)
   end
   local function circle(x,y,r,rgb,thickness,opacity)
     if thickness then thickness=clamp(thickness,0.01,64,1) end
     local fringe=1+(thickness or 0)*0.5
-    emit({kind=thickness and 'Circle' or 'CircleFilled',x=x,y=y,radius=r,color=rgb,alpha=opacity,thickness=thickness},box(x-r-fringe,y-r-fringe,x+r+fringe,y+r+fringe))
+    emit({kind=thickness and 'Circle' or 'CircleFilled',x=x,y=y,radius=r,color=rgb,alpha=opacity,thickness=thickness},
+      x-r-fringe,y-r-fringe,x+r+fringe,y+r+fringe)
   end
   local function label(text,x,y,size,available,align,rgb,shadow)
     text=fit(text,size,available); if text=='' then return end
@@ -192,7 +204,7 @@ function R.prepare(style,context,metrics)
     local shift=align=='left' and 0 or align=='right' and available-extent or (available-extent)*0.5
     x=x+shift-math.min(0,m.ink_x0)
     local function text_at(tx,ty,c,a)
-      emit({kind='Text',x=tx,y=ty,text=text,size=size,font=font,color=c,alpha=a},box(tx+m.ink_x0,ty+m.ink_y0,tx+m.ink_x1,ty+m.ink_y1))
+      emit({kind='Text',x=tx,y=ty,text=text,size=size,font=font,color=c,alpha=a},tx+m.ink_x0,ty+m.ink_y0,tx+m.ink_x1,ty+m.ink_y1)
     end
     if shadow then text_at(x+unit,y+unit,0,alpha*0.82) end
     text_at(x,y,rgb or foreground,alpha)
@@ -277,7 +289,7 @@ function R.prepare(style,context,metrics)
     column_width=math.max(column_width,bw)
   end
   if not health and not mana and not cast and not show_name and subtitle=='' and #badges==0 then
-    return {hide=true,bounds=box(0,0,0,0),commands={},clickable=false}
+    return {hide=true,bounds=box(0,0,0,0),commands={},vertex_cost=0,clickable=false}
   end
   local marker=target and target_style=='arrow' and 10*unit or 0
   local y=marker
@@ -344,7 +356,7 @@ function R.prepare(style,context,metrics)
         if u1>=u0 and v1>=v0 then
           local radius=badge_size*0.45
           emit({kind='Image',texture=get(t,'texture'),x0=cx-radius,y0=by_center-radius,x1=cx+radius,y1=by_center+radius,
-            u0=u0,v0=v0,u1=u1,v1=v1,color=0xffffff},box(cx-radius,by_center-radius,cx+radius,by_center+radius)); drawn=true
+            u0=u0,v0=v0,u1=u1,v1=v1,color=0xffffff},cx-radius,by_center-radius,cx+radius,by_center+radius); drawn=true
         end
       end
     end
@@ -356,7 +368,7 @@ function R.prepare(style,context,metrics)
     if x1<=x0 or y1<=y0 then return end
     if texture=='gradient' or texture=='gloss' then
       emit({kind='Gradient',x0=x0,y0=y0,x1=x1,y1=y1,color=tone(rgb,1.15),color2=tone(rgb,0.75),alpha2=alpha,
-        rounding=rounding},box(x0-1,y0-1,x1+1,y1+1))
+        rounding=rounding},x0-1,y0-1,x1+1,y1+1)
     else rect(x0,y0,x1,y1,rgb,nil,rounding) end
     if texture=='gloss' then
       local shine=(y1-y0)*0.42
@@ -446,13 +458,15 @@ function R.prepare(style,context,metrics)
   if show_name and not inside then label(name,-width/2,name_y,fs,width,text_align,foreground,true) end
   label(subtitle,-width/2,subtitle_y,tag_font,width,text_align,foreground,true)
   if error_message then return nil,error_message end
-  if not total then return {hide=true,bounds=box(0,0,0,0),commands={},clickable=false} end
-  if R.vertex_cost(commands)>R.MAX_MODEL_VERTICES then return nil,'plate geometry budget exceeded' end
+  if #commands==0 then return {hide=true,bounds=box(0,0,0,0),commands={},vertex_cost=0,clickable=false} end
+  local vertex_cost=R.vertex_cost(commands)
+  if vertex_cost>R.MAX_MODEL_VERTICES then return nil,'plate geometry budget exceeded' end
+  local total=box(left,top,right,bottom)
   if total.w>4096 or total.h>4096 then return nil,'plate bounds exceeded' end
   local dy=-total.y-total.h-number(style,'offset_y',-200,200,0)*unit
-  for _,command in ipairs(commands) do translate(command,0,dy) end
+  for _,command in ipairs(commands) do translate_y(command,dy) end
   total.y=total.y+dy
-  return {bounds=total,commands=commands,stack=get(style,'stack')==true,
+  return {bounds=total,commands=commands,vertex_cost=vertex_cost,stack=get(style,'stack')==true,
     stack_gap=number(style,'stack_gap',0,20,4)*unit,max_stack=number(style,'max_stack',0,200,96)*unit,
     through_walls=get(style,'through_walls')==true,clickable=get(style,'clickable')~=false}
 end
@@ -462,7 +476,7 @@ end
 -- Targets and nonstacking plates are pinned. Others use a deterministic target,
 -- nearest, spawn-id priority. Work is bounded to 256 stacking candidates and
 -- 4096 blockers; crowded overflow is hidden rather than drawn through neighbors.
-function R.stack(records,viewport)
+function R.stack(records,viewport,exhausted)
   if type(records)~='table' then return records end
   viewport=type(viewport)=='table' and viewport or {}
   local vx,vy=number(viewport,'x',-131072,131072,0),number(viewport,'y',-131072,131072,0)
@@ -490,6 +504,10 @@ function R.stack(records,viewport)
     return ai~=bi and ai<bi or ai==bi and a.index<b.index
   end)
   for index,item in ipairs(order) do
+    if exhausted and exhausted() then
+      for remaining=index,#order do order[remaining].record.hidden=true end
+      break
+    end
     local r=item.record; local b=rect_for(r,0)
     if index>R.MAX_STACKED or b.x+b.w<vx or b.x>vx+vw or b.y+b.h<vy or b.y>vy+vh then r.hidden=true
     else

@@ -61,6 +61,7 @@ end
 -- than extending a stale badge indefinitely.
 function Decoder:_advance(now)
     if not valid_time(now) then return false end
+    if now == self.last_time then return true end
     if self.last_time and now < self.last_time then self:reset() end
     self.last_time = now
     for _, state in pairs(self.snapshots) do
