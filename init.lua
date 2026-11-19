@@ -136,10 +136,11 @@ local function con_color(spawn)
   local own_level,level=player.level,spawn.level
   if con_player_level~=own_level then con_by_level={}; con_player_level=own_level end
   if C.finite(own_level) and own_level>0 and C.finite(level) and level>=1 and level<=255 and level%1==0 then
-    local color=con_by_level[level]
+    local key=spawn.npc and level or -level
+    local color=con_by_level[key]
     if color then return color end
     color=con_colors[mq.TLO.Spawn(spawn.id).ConColor()]
-    con_by_level[level]=color
+    con_by_level[key]=color
     return color
   end
   return con_colors[mq.TLO.Spawn(spawn.id).ConColor()]
@@ -327,7 +328,7 @@ panel=Panel.new(ui,{
     store.profiles[name]=C.repair(store.settings); changed(); return 'Saved '..name..'.'
   end,
   status=function()
-    local lines={'Crest 0.3.0-preview.3',
+    local lines={'Crest 0.3.0-preview.4',
       loaded_path and 'Character settings loaded.' or 'Waiting for a character in a zone.',
       stats.last_packet>0 and 'Optional indicators are receiving supported data.' or 'Optional indicators are waiting for supported data.',
       'HP / mana / casts / auras reflect only information supplied by your server.'}

@@ -1,5 +1,11 @@
 # Changes
 
+## 0.3.0-preview.4
+
+- Added an option to color names and levels by consider color.
+- Added level placement above or directly below the health bar.
+- Fixed target chevrons overlapping other parts of wide nameplates.
+
 ## 0.3.0-preview.3
 
 - Added **Parentheses only** for the classic concealment cue without a type tag.

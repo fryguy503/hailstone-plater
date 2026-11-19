@@ -140,6 +140,20 @@ test('target emphasis, name truncation and percentage colors stay bounded',funct
   end
 end)
 
+test('consider text color is independent of bar colors and keeps a separate level',function()
+  local p,s=presentation(function(spawn,ctx,settings,extra)
+    spawn.level=65; spawn.class=1; ctx.hp_percent=10
+    settings.show_class=true; settings.level_position='below'; settings.con_name_color=true
+    local reads=0
+    extra.get_con_color=function() reads=reads+1; equal(reads,1); return 0xf16b67 end
+  end)
+  equal(p.name_color,0xf16b67); equal(p.level_color,p.name_color)
+  equal(p.level,'Lv 65'); equal(p.level_position,'below'); equal(p.subtitle,'Warrior')
+  equal(p.health.color,s.low_color); equal(p.text_color,s.text_color)
+  p,s=presentation(function(_,_,settings) settings.con_name_color=true; settings.show_level=false end)
+  equal(p.name_color,s.text_color); equal(p.level,'')
+end)
+
 test('Server indicator toggles and badge capacity are independent',function()
   local tokens={'eye','sleep','peace','star','sun','moon','diamond','triangle','cross','skull','sword'}
   local p=presentation(function(_,_,s,x)

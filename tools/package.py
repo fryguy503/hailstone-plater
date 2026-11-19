@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '0.3.0-preview.3'
+VERSION = '0.3.0-preview.4'
 CAPS = 'read,commands,ui,extend,packets'
 
 def main():

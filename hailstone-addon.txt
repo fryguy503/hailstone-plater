@@ -1,10 +1,10 @@
 hailstone-addon 1
 name crest
 kind script
-version 0.3.0-preview.3
+version 0.3.0-preview.4
 autoload 1
 min_client 0.7.1-beta
 author Fryguy
 description Configurable world health, resource and cast plates with optional server status icons.
 caps read,commands,ui,extend,packets
-package any 61795 ce8b08306a19233abe948d61c21389c162a5f87a64ded5c91be6eaff5d9f87f9 crest-0.3.0-preview.3.zip
+package any 62832 eb61d68566b9d43b3bf7cd789af028b94db824dffb0eae506d50ce2eb406f6bb crest-0.3.0-preview.4.zip

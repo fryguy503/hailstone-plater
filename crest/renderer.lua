@@ -95,12 +95,34 @@ function R.prepare(style,context,metrics)
   local border=color(get(style,'border_color'),0x202c3c)
   local background=color(get(style,'background_color'),0x111823)
   local foreground=color(get(style,'text_color'),0xf2f5fa)
+  local name_color=color(get(style,'name_color'),foreground)
+  local level_color=color(get(style,'level_color'),foreground)
   local health,mana,cast=bar(get(style,'health')),bar(get(style,'mana')),bar(get(style,'cast'))
   local cast_width=number(style,'cast_width',0,600,0)
   cast_width=(cast_width>0 and math.max(24,cast_width) or width/unit)*unit
   local body_width=cast and math.max(width,cast_width) or width
+  local chevron_tip,chevron_right
+  if target and target_style=='chevrons' and (health or mana or cast) then
+    -- Place both chevrons outside the widest bar, including the frame art and stroke fringes.
+    local bar_width=(health or mana) and body_width or cast_width
+    local frame_fringe=1+out
+    if frame=='runic' then frame_fringe=1+15*unit
+    elseif frame=='glass' then frame_fringe=frame_fringe+unit/2
+    elseif frame=='bevel' then frame_fringe=frame_fringe+0.75*unit
+    elseif frame=='minimal' then frame_fringe=1+math.max(0.25,2*unit) end
+    local stroke_fringe=1+unit
+    chevron_tip=bar_width/2+math.max(5*unit,frame_fringe+stroke_fringe+gap)
+    chevron_right=chevron_tip+12*unit+stroke_fringe
+  end
   local name=clean(get(style,'name') or get(context,'name'),256)
   local subtitle=clean(get(style,'subtitle'),256)
+  local level=clean(get(style,'level'),24)
+  local level_below=level~='' and health~=nil and get(style,'level_position')=='below'
+  local level_prefix=0
+  if level~='' and not level_below then
+    subtitle=level..(subtitle~='' and (' | '..subtitle) or '')
+    level_prefix=#level
+  end
   local show_name=get(style,'show_name')~=false and name~=''
   local inside=show_name and name_position=='inside' and health~=nil
   local error_message
@@ -198,16 +220,25 @@ function R.prepare(style,context,metrics)
     emit({kind=thickness and 'Circle' or 'CircleFilled',x=x,y=y,radius=r,color=rgb,alpha=opacity,thickness=thickness},
       x-r-fringe,y-r-fringe,x+r+fringe,y+r+fringe)
   end
-  local function label(text,x,y,size,available,align,rgb,shadow)
+  local function label(text,x,y,size,available,align,rgb,shadow,prefix_bytes,prefix_color)
     text=fit(text,size,available); if text=='' then return end
     local extent,m=text_extent(text,size)
     local shift=align=='left' and 0 or align=='right' and available-extent or (available-extent)*0.5
     x=x+shift-math.min(0,m.ink_x0)
-    local function text_at(tx,ty,c,a)
-      emit({kind='Text',x=tx,y=ty,text=text,size=size,font=font,color=c,alpha=a},tx+m.ink_x0,ty+m.ink_y0,tx+m.ink_x1,ty+m.ink_y1)
+    local function text_at(piece,ink,tx,ty,c,a)
+      emit({kind='Text',x=tx,y=ty,text=piece,size=size,font=font,color=c,alpha=a},
+        tx+ink.ink_x0,ty+ink.ink_y0,tx+ink.ink_x1,ty+ink.ink_y1)
     end
-    if shadow then text_at(x+unit,y+unit,0,alpha*0.82) end
-    text_at(x,y,rgb or foreground,alpha)
+    if shadow then text_at(text,m,x+unit,y+unit,0,alpha*0.82) end
+    if prefix_bytes and prefix_bytes>0 and prefix_color~=rgb then
+      if #text<=prefix_bytes then text_at(text,m,x,y,prefix_color,alpha)
+      else
+        local head,tail=text:sub(1,prefix_bytes),text:sub(prefix_bytes+1)
+        local head_ink=measured(head,size)
+        text_at(head,head_ink,x,y,prefix_color,alpha)
+        text_at(tail,measured(tail,size),x+head_ink.width,y,rgb,alpha)
+      end
+    else text_at(text,m,x,y,rgb or foreground,alpha) end
   end
   local function polygon(points,rgb,thickness)
     if thickness then
@@ -319,6 +350,12 @@ function R.prepare(style,context,metrics)
   local hh,mh,ch=height(health,'height',12),height(mana,'mana_height',4),height(cast,'cast_height',9)
   if inside then hh=math.max(hh,text_height(name,fs)+gap+unit) end
   local hy=y; if health then y=y+hh end
+  local level_y=y
+  if level_below then
+    local h,above=text_height(level,tag_font)
+    level_y=y+row_gap-above
+    y=y+row_gap+h+unit
+  end
   if health and mana then y=y+row_gap end
   local my=y; if mana then y=y+mh end
   if cast and (health or mana) then y=y+number(style,'cast_gap',0,24,2)*unit+out*2 end
@@ -331,13 +368,17 @@ function R.prepare(style,context,metrics)
     local column_h=#badges*(badge_size+badge_gap)-badge_gap
     local body_h=y-body_top
     local shift=math.max(0,(column_h-body_h)/2)
-    name_y=name_y+shift; subtitle_y=subtitle_y+shift; hy=hy+shift; my=my+shift; cy=cy+shift
+    name_y=name_y+shift; subtitle_y=subtitle_y+shift; level_y=level_y+shift; hy=hy+shift; my=my+shift; cy=cy+shift
     local top=body_top+math.max(0,(body_h-column_h)/2)
     local decoration=frame=='runic' and 17*unit or out+2*unit
-    if target and target_style=='chevrons' then decoration=math.max(decoration,20*unit) end
     if target and target_style=='glow' then decoration=math.max(decoration,9*unit) end
+    local side_edge=body_width/2+decoration
+    if chevron_right then
+      local badge_fringe=frame=='minimal' and 0 or 1+((frame=='bevel' or frame=='runic') and unit/2 or 0)
+      side_edge=math.max(side_edge,chevron_right+badge_fringe)
+    end
     for i,b in ipairs(badges) do
-      b.x=badge_position=='left' and -body_width/2-decoration-badge_gap-column_width or body_width/2+decoration+badge_gap
+      b.x=badge_position=='left' and -side_edge-badge_gap-column_width or side_edge+badge_gap
       b.y=top+(i-1)*(badge_size+badge_gap)
     end
   elseif badge_position=='below' and #badges>0 then badge_rows(y+row_gap) end
@@ -380,11 +421,11 @@ function R.prepare(style,context,metrics)
     if target_style=='arrow' then rect(x0-unit,y0-unit,x1+unit,y1+unit,border,nil,rounding,unit)
     elseif target_style=='chevrons' then
       local middle=(y0+y1)/2
-      for _,direction in ipairs({-1,1}) do for _,distance in ipairs({8,15}) do
-        local cx=(direction<0 and x0 or x1)+direction*distance*unit
-        local tip=cx-direction*3*unit
-        line(cx+direction*2*unit,middle-5*unit,tip,middle,border,2*unit)
-        line(tip,middle,cx+direction*2*unit,middle+5*unit,border,2*unit)
+      for _,direction in ipairs({-1,1}) do for _,distance in ipairs({0,7}) do
+        local tip=direction*(chevron_tip+distance*unit)
+        local tail=tip+direction*5*unit
+        line(tail,middle-5*unit,tip,middle,border,2*unit)
+        line(tip,middle,tail,middle+5*unit,border,2*unit)
       end end
     elseif target_style=='brackets' then
       for _,direction in ipairs({-1,1}) do for _,row in ipairs({-1,1}) do
@@ -449,14 +490,15 @@ function R.prepare(style,context,metrics)
     if inside and is_health then
       local nx=health_align=='left' and x0+reserved+gap or x0+gap
       local nh,name_above=text_height(name,fs)
-      label(name,nx,yy+(h-nh)/2-name_above,fs,name_width,text_align,foreground,true)
+      label(name,nx,yy+(h-nh)/2-name_above,fs,name_width,text_align,name_color,true)
     end
   end
   draw_bar(health,hy,hh,width,health_align,true,true)
   draw_bar(mana,my,mh,width,health_align,not health,false)
   draw_bar(cast,cy,ch,cast_width,cast_align,not health and not mana,false)
-  if show_name and not inside then label(name,-width/2,name_y,fs,width,text_align,foreground,true) end
-  label(subtitle,-width/2,subtitle_y,tag_font,width,text_align,foreground,true)
+  if show_name and not inside then label(name,-width/2,name_y,fs,width,text_align,name_color,true) end
+  label(subtitle,-width/2,subtitle_y,tag_font,width,text_align,foreground,true,level_prefix,level_color)
+  if level_below then label(level,-width/2,level_y,tag_font,width,text_align,level_color,true) end
   if error_message then return nil,error_message end
   if #commands==0 then return {hide=true,bounds=box(0,0,0,0),commands={},vertex_cost=0,clickable=false} end
   local vertex_cost=R.vertex_cost(commands)

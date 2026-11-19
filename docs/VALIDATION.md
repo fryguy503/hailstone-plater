@@ -1,6 +1,6 @@
 # Crest validation — 2026-11-15
 
-Crest 0.3.0-preview.3 is a standalone Lua add-on preview. Its renderer, bars, themes, icons, layout and stacking ship in the add-on. The client supplies a reusable world-nameplate canvas service through the shared UI API update. No client executable or client patch is included in the add-on archive. Release publication, server deployment, live gameplay and physical-controller acceptance remain pending.
+Crest 0.3.0-preview.4 is a standalone Lua add-on preview. Its renderer, bars, themes, icons, layout and stacking ship in the add-on. The client supplies a reusable world-nameplate canvas service through the shared UI API update. No client executable or client patch is included in the add-on archive. Live gameplay and physical-controller acceptance remain pending for this preview.
 
 ## Add-on checks
 

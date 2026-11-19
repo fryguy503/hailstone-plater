@@ -83,13 +83,18 @@ function M:presentation(spawn,ctx,s,extra)
   local rule
   for _,r in ipairs(s.rules) do if matches(r,spawn,kind,name:lower()) then rule=r; break end end
   if rule and rule.hide then return {hide=true} end
+  local con_text=s.con_name_color and not spawn.corpse and (s.show_name or s.show_level)
+  local con_health=s.color_mode=='consider' and kind=='npc'
+  local con
+  if con_text or con_health then
+    con=extra.con_color or (extra.get_con_color and extra.get_con_color(spawn))
+    if not C.finite(con) then con=nil end
+  end
   local color=kind=='corpse' and s.corpse_color or kind=='pet' and s.pet_color or
     kind=='group' and s.group_color or (kind=='player' or kind=='self') and s.player_color or s.npc_color
   if s.color_mode=='class' then color=class_colors[spawn.class] or color
   elseif s.color_mode=='health' and hp then color=hp<50 and blend(0xf15260,0xecc55a,hp/50) or blend(0xecc55a,0x59d9a0,(hp-50)/50)
-  elseif s.color_mode=='consider' and kind=='npc' then
-    local con=extra.con_color or (extra.get_con_color and extra.get_con_color(spawn))
-    if C.finite(con) then color=con end
+  elseif con_health and con then color=con
   elseif s.color_mode=='custom' then color=s.npc_color end
   if hp and s.low_health_color and hp<=s.low_health then color=s.low_color end
   if rule then color=rule.color end
@@ -98,6 +103,8 @@ function M:presentation(spawn,ctx,s,extra)
   local alpha=s.alpha*(extra.has_target and not targeted and s.non_target_alpha or 1)
   if s.distance_fade and not targeted then alpha=alpha*(1-0.65*math.max(0,(distance/s.max_distance-0.65)/0.35)) end
   local p={name=C.text(trim_name(s.short_names and name or C.text(ctx.name or name,256),math.floor(s.max_name)),256),
+    name_color=con_text and con or s.text_color,level_color=con_text and con or s.text_color,
+    level=s.show_level and ('Lv '..tostring(spawn.level or '?')) or '',level_position=s.level_position,
     show_name=s.show_name,show_marker=targeted and s.target_marker,
     width=targeted and s.target_width>0 and math.max(40,s.target_width) or s.width,
     height=s.height,mana_height=s.mana_height,cast_height=s.cast_height,
@@ -113,7 +120,6 @@ function M:presentation(spawn,ctx,s,extra)
     p.border_color=blend(s.border_color,s.low_color,0.5+0.5*math.sin(now/180))
   end
   local sub={}
-  if s.show_level then sub[#sub+1]='Lv '..tostring(spawn.level or '?') end
   if s.show_class and classes[spawn.class] then sub[#sub+1]=classes[spawn.class] end
   if s.show_distance then sub[#sub+1]=string.format('%.0fu',distance) end
   p.subtitle=table.concat(sub,' | ')

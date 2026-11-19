@@ -75,6 +75,30 @@ local function signature(model)
   return table.concat(values,';')
 end
 
+test('the level can move below HP while retaining its consider color',function()
+  local s=style()
+  s.name='Guardian'; s.level='Lv 65'; s.subtitle='Warrior'; s.mana.text='MANA'
+  s.name_color=0xf16b67; s.level_color=0xeeee66
+  local above=prepare(s)
+  local name=texts(above,s.name)[1]
+  local level=texts(above,s.level)[1]
+  local other=texts(above,' | Warrior')[1]
+  equal(name.color,s.name_color); equal(level.color,s.level_color); equal(other.color,s.text_color)
+  equal(level.y,other.y); check(level.y<texts(above,'72%')[1].y)
+
+  s.level_position='below'; s.name_position='inside'; s.badge_position='right'
+  local below=prepare(s)
+  verify(below)
+  level=texts(below,s.level)[1]
+  check(texts(below,'72%')[1].y<level.y and level.y<texts(below,'MANA')[1].y)
+  equal(texts(below,'Warrior')[1].color,s.text_color)
+  equal(texts(below,s.name)[1].color,s.name_color)
+
+  s.health=nil; s.level_color=s.text_color
+  local fallback=prepare(s)
+  check(texts(fallback,'Lv 65 | Warrior')[1].y<texts(fallback,'MANA')[1].y)
+end)
+
 test('name decoration survives narrow layouts and suffixes fall back to a text-only tag',function()
   local s=style()
   s.name_prefix,s.name_suffix='(',')'
@@ -180,6 +204,51 @@ test('frame designs, fill textures and target decorations have distinct geometry
     local s=style(); s.target_style=trim; local p=prepare(s); verify(p)
     local key=signature(p); check(not seen[key],trim..' has duplicate geometry'); seen[key]=true
     if trim~='none' then local off=prepare(s,{target=false,font_size=14,font=3}); check(signature(off)~=key) end
+  end
+end)
+
+test('wide targets keep mirrored chevrons clear of all bars, frame ornaments and side badges',function()
+  for _,frame in ipairs({'minimal','solid','bevel','glass','runic'}) do
+    for _,width in ipairs({40,110,113,114,115,142,184,256,400}) do
+      for _,scale in ipairs({0.2,0.5,1,1.5}) do
+        local s=style()
+        s.frame_style=frame; s.width=width; s.cast_width=math.min(400,width+36); s.cast_gap=0
+        s.health.text=''; s.height=3; s.mana=nil; s.cast.text=''; s.name='Target'
+        s.target_style='none'; s.badges={}
+        local ctx={target=true,font_size=14,font=3,scale=scale}
+        local body=prepare(s,ctx).bounds
+        s.target_style='chevrons'
+        s.badges={{text_only=true,label='INV+IVU',color=0xffd989}}
+        for _,side in ipairs({'left','right'}) do
+          s.badge_position=side
+          local model=prepare(s,ctx)
+          verify(model)
+          local left_inner,left_outer,right_inner,right_outer=-math.huge,math.huge,math.huge,-math.huge
+          local count,badge=0,nil
+          for _,c in ipairs(model.commands) do
+            if c.kind=='Line' and math.abs(c.thickness-2*scale)<0.00001 and
+              math.abs(math.abs(c.x1-c.x0)-5*scale)<0.00001 and math.abs(math.abs(c.y1-c.y0)-5*scale)<0.00001 then
+              local lo,hi=c.bounds.x,c.bounds.x+c.bounds.w
+              if lo<0 then left_outer,left_inner=math.min(left_outer,lo),math.max(left_inner,hi)
+              else right_inner,right_outer=math.min(right_inner,lo),math.max(right_outer,hi) end
+              count=count+1
+            elseif c.kind=='RectFilled' and c.color==s.background_color and (c.x1<body.x or c.x0>body.x+body.w) then
+              badge=c.bounds
+            end
+          end
+          equal(count,8)
+          near(left_outer,-right_outer); near(left_inner,-right_inner)
+          check(left_inner<body.x and right_inner>body.x+body.w,'chevrons overlap another plate primitive')
+          if frame~='minimal' then
+            check(badge~=nil,'side badge missing')
+            -- Bevel and Runic badge outlines extend half a unit past the fill's fringe.
+            local outline=(frame=='bevel' or frame=='runic') and scale/2 or 0
+            check(side=='left' and badge.x+badge.w+outline<left_outer or
+                  side=='right' and badge.x-outline>right_outer,'chevron overlaps a side badge')
+          end
+        end
+      end
+    end
   end
 end)
 
