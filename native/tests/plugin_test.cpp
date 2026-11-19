@@ -56,7 +56,7 @@ struct FakeHost {
         };
         api.add_command = [](void* data, const char* name, HailstoneCommandFn fn, void* user) {
             auto& self = *static_cast<FakeHost*>(data);
-            require(std::string_view(name) == "/crestnative" && fn, "native command registration");
+            require(std::string_view(name) == "/crest" && fn, "native command registration");
             self.command = fn;
             self.command_data = user;
             return 1;

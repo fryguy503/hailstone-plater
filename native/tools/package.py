@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package the Windows x64 Crest Native preview with Hailstone's official add-on tool."""
+"""Package the Windows x64 Crest DLL with Hailstone's official add-on tool."""
 
 import argparse
 import hashlib
@@ -12,13 +12,13 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
-NAME = 'crest-native'
-VERSION = '0.1.0-preview.1'
+NAME = 'crest'
+VERSION = '0.3.0-preview.5'
 PLATFORM = 'windows-x64'
 MIN_CLIENT = '0.7.1-beta'
 CAPS = 'read,commands,ui,extend,packets'
 AUTHOR = 'Fryguy'
-DESCRIPTION = 'Native preview of Crest world nameplates for Hailstone.'
+DESCRIPTION = 'Native Crest world nameplates for Hailstone with health, mana, casting and concealment cues.'
 DLL = f'{NAME}.dll'
 MANIFEST = 'hailstone-addon.txt'
 ARCHIVE = f'{NAME}-{VERSION}-{PLATFORM}.zip'
@@ -65,7 +65,7 @@ def package(client_source, build_dir, out):
     if not packager.is_file():
         raise ValueError('--client-source must contain tools/make_addon.py')
     if out.resolve() == ROOT:
-        raise ValueError('--out must be separate from the Lua add-on root manifest')
+        raise ValueError('--out must be separate from the repository root manifest')
     libraries = (build_dir / DLL, build_dir / 'Release' / DLL)
     library = next((candidate for candidate in libraries if candidate.is_file()), None)
     if library is None:

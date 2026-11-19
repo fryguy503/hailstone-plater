@@ -1,10 +1,9 @@
 hailstone-addon 1
 name crest
-kind script
-version 0.3.0-preview.4
-autoload 1
+kind plugin
+version 0.3.0-preview.5
 min_client 0.7.1-beta
 author Fryguy
-description Configurable world health, resource and cast plates with optional server status icons.
+description Native Crest world nameplates for Hailstone with health, mana, casting and concealment cues.
 caps read,commands,ui,extend,packets
-package any 62832 eb61d68566b9d43b3bf7cd789af028b94db824dffb0eae506d50ce2eb406f6bb crest-0.3.0-preview.4.zip
+package windows-x64 100839 ec22ae12268b30538944fdfcbe39b9e64b81c6bd6621f64d70c2e7321d720abf crest-0.3.0-preview.5-windows-x64.zip

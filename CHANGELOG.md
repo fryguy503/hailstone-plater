@@ -1,5 +1,10 @@
 # Changes
 
+## 0.3.0-preview.5
+
+- Published the Windows x64 DLL as the default Crest package. It requires a Hailstone build with the merged native canvas SDK.
+- Added `/crest` controls for the native renderer and concealment modes. Switching from the Lua package requires a manual reinstall through Add-ons.
+
 ## 0.3.0-preview.4
 
 - Added an option to color names and levels by consider color.

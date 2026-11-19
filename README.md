@@ -1,10 +1,10 @@
 # Hailstone Crest
 
-Crest is a standalone optional nameplate add-on for Hailstone. Its archive contains its own Lua renderer, visual themes, settings, rules, indicators and profiles. The normal Add-ons system manages installation and automatic activation. Open settings from the in-game **Crest** menu or `/crest`.
+Crest Preview 5 is a Windows x64 DLL that uses Hailstone's native nameplate canvas. See the [native install and compatibility guide](native/README.md) before switching from Lua Crest. The tagged Lua release `v0.3.0-preview.4` is available for Lua users.
 
-This preview requires Hailstone’s generic nameplate canvas API 1 and managed Lua add-on support, being integrated into the shared UI API update. The add-on works independently of the selected interface. Its package contains no client executable, client patch, game assets or interface replacement. Hosts without the service keep ordinary captions and show a compatibility notice.
+## Lua Preview 4 guide
 
-Published previews are unsigned and install through **Add-ons**, with an **Enabled** switch. Lua is the implementation language and runs as a managed add-on.
+The Lua edition contains its own renderer, visual themes, settings, rules, indicators and profiles. It requires Hailstone's generic nameplate canvas API 1 and managed Lua add-on support. Use the **Enabled** switch in Add-ons, then open settings from the in-game **Crest** menu or `/crest`.
 
 ## Complete visual themes
 

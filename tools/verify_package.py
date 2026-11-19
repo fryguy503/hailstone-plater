@@ -73,8 +73,6 @@ def verify_release(release, source_root=ROOT):
     digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
     require(int(package[2]) == archive_path.stat().st_size and package[3] == digest,
             'Add-on archive size or SHA-256 does not match its manifest')
-    require((source_root / 'hailstone-addon.txt').read_bytes() == manifest_path.read_bytes(),
-            'Root and release manifests differ')
     public = re.search(r'M\.presets\s*=\s*\{([^}]+)\}',
                        (source_root / 'crest/config.lua').read_text(encoding='utf-8'))
     require(public is not None, 'Public preset declaration not found')

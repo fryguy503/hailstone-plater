@@ -1,16 +1,16 @@
-# Crest Native preview
+# Crest for Windows x64
 
-Crest Native is an experimental Windows x64 compiled add-on. It draws names, known HP and mana, observed casts, and the five concealment modes through Hailstone's shared nameplate canvas. The canvas uses Hailstone's depth, visibility, and manual click handling. The add-on uses `read`, `ui`, and `extend` for the canvas, `commands` for preview controls, and optional `packets` for exact NPC concealment from a compatible server.
+Crest draws world nameplates with names, known health and mana, observed casts, and five concealment display modes. Hailstone's native nameplate canvas handles depth, actor visibility, and manual clicks. Compatible servers can supply exact NPC concealment types through the optional packet permission.
 
-## Install the preview
+## Install or switch from Lua Crest
 
-Use a Windows x64 Hailstone build with the merged native nameplate SDK. This preview was built against upstream revision `8cbd0520`, which includes the candidate and command strides. The downloadable `0.7.1-beta` predates those SDK fields, even though a source build can report the same version number.
+1. Start a Windows x64 Hailstone build with the merged native nameplate SDK. The downloadable `0.7.1-beta` predates this API. Compatible source builds can report the same version number.
+2. At the login screen, open **Add-ons → My add-ons** and remove the Lua `crest` entry if installed. Hailstone requires this one-time step to switch from a script to a compiled plugin. If you used the earlier `crest-native` preview, unload it so Crest has the nameplate canvas to itself.
+3. In **Add-ons**, paste the Crest repository link or the `v0.3.0-preview.5` release link and install `crest`. This installs `crest.dll`. Use Hailstone's normal plugin controls if the server requires consent or manual loading.
 
-Paste the tagged native release URL into Hailstone's **Add-ons** manager. It installs as `crest-native`. Test in a separate profile with a single nameplate provider active. Servers that require the shared add-on repository can apply that requirement to both packages and may request native code consent. Use a test profile and server where you can choose which provider to run.
+From in-game chat, use `/crest parens` for parentheses only, `/crest parens-tags` for parentheses and type tags, `/crest tags` for tags, `/crest suffix` for a name suffix, and `/crest concealment-off` to hide the concealment cue. Use `/crest off` or `/crest on` to disable or enable Crest nameplates. These commands apply to the current session.
 
-Load `crest-native` using the client's normal plugin controls. `/crestnative parens`, `parens-tags`, `tags`, `suffix`, and `concealment-off` switch the cue for the current session. `/crestnative off` and `/crestnative on` turn the native provider off and on.
-
-The preview has basic bar rendering and command-based settings. The settings window, saved profile migration, themes, aura rendering, and exact group and extended-target resource updates remain in development.
+The DLL has basic bar rendering and command-based settings. The Lua settings window, saved profiles, themes, name and level styling, auras, and supplemental group and extended-target resource readings are available in the Lua `v0.3.0-preview.4` release. To roll back, use a Hailstone build that runs Lua Preview 4, remove the native `crest` entry in **My add-ons**, and install from the Lua release tag. The merged SDK test build rejects Preview 4 during Lua compilation. Keep your working Lua installation on other platforms or Hailstone builds without the native SDK.
 
 ## Build and package
 
@@ -20,5 +20,5 @@ Run from the Crest checkout with a C++20 toolchain:
 cmake -S native -B native/build -DHAILSTONE_SDK_DIR=<path-to-hailstone-sdk>
 cmake --build native/build --config Release
 ctest --test-dir native/build -C Release --output-on-failure
-python native/tools/package.py --client-source <path-to-hailstone-source> --build-dir native/build --out native/release/0.1.0-preview.1
+python native/tools/package.py --client-source <path-to-hailstone-source> --build-dir native/build --out native/release/0.3.0-preview.5
 ```

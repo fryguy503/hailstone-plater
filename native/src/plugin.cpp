@@ -237,7 +237,7 @@ void command(void*, const char* argument) {
     else if (value == "tags") concealment_display = ConcealmentDisplay::Tags;
     else if (value == "suffix") concealment_display = ConcealmentDisplay::Suffix;
     else if (value == "concealment-off") concealment_display = ConcealmentDisplay::Off;
-    else if (host->log) host->log(host->host, 1, "Crest Native: /crestnative on|off|parens-tags|parens|tags|suffix|concealment-off");
+    else if (host->log) host->log(host->host, 1, "Crest: /crest on|off|parens-tags|parens|tags|suffix|concealment-off");
 }
 
 bool nameplate_api_available() {
@@ -266,10 +266,10 @@ void refresh_registration() {
 
 HAILSTONE_API void InitializePlugin() {
     if (!nameplate_api_available() && HAILSTONE_HOST_HAS(host, log)) {
-        host->log(host->host, 2, "Crest Native requires a Hailstone build with the merged native nameplate SDK.");
+        host->log(host->host, 2, "Crest requires a Hailstone build with the merged native nameplate SDK.");
     }
     refresh_registration();
-    if (HAILSTONE_HOST_HAS(host, add_command)) AddCommand("/crestnative", command, nullptr);
+    if (HAILSTONE_HOST_HAS(host, add_command)) AddCommand("/crest", command, nullptr);
 }
 
 HAILSTONE_API void ShutdownPlugin() {
