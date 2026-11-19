@@ -185,14 +185,14 @@ bool prepare(Plate& plate, const HailstoneNameplateCandidate& actor, const Hails
 
 void canvas(void*, const HailstoneNameplateFrame* frame) {
     if (!enabled || !frame || frame->size < sizeof(*frame) || frame->candidate_count > 1024 ||
-        (frame->candidate_count && !frame->candidates)) return;
+        (frame->candidate_count && (!frame->candidates || !HAILSTONE_NAMEPLATE_CANDIDATE_HAS(frame, cast_name)))) return;
     const auto started = Clock::now();
     const auto ms = now_ms();
     std::vector<Plate> plates(frame->candidate_count);
     std::vector<crest::StackPlate> layout(frame->candidate_count);
     std::vector<bool> available(frame->candidate_count, true);
     for (std::uint32_t index = 0; index < frame->candidate_count; ++index) {
-        const auto& actor = frame->candidates[index];
+        const auto& actor = *hailstone_nameplate_candidate(frame, index);
         observe_actor(actor);
         auto& item = layout[index];
         item.x = actor.x; item.y = actor.y; item.depth = actor.depth; item.id = actor.spawn_id;
@@ -221,6 +221,7 @@ void canvas(void*, const HailstoneNameplateFrame* frame) {
             model.bounds = plate.bounds;
             model.offset_y = static_cast<float>(item.offset_y);
             model.command_count = plate.count;
+            model.command_size = sizeof(HailstoneNameplateCommand);
             model.commands = plate.commands.data();
         }
         host->nameplate_submit(host->host, &model);
@@ -239,9 +240,15 @@ void command(void*, const char* argument) {
     else if (host->log) host->log(host->host, 1, "Crest Native: /crestnative on|off|parens-tags|parens|tags|suffix|concealment-off");
 }
 
+bool nameplate_api_available() {
+    // Older hosts report ABI 3 too. Check the entire current table prefix before
+    // accessing its nameplate slots.
+    return HAILSTONE_HOST_HAS(host, nameplate_spell_icon) && host->caps && host->nameplate_register &&
+           host->nameplate_unregister && host->nameplate_submit && host->nameplate_measure_text;
+}
+
 void refresh_registration() {
-    if (!host || !HAILSTONE_HOST_HAS(host, nameplate_spell_icon) || !host->nameplate_register ||
-        !host->nameplate_unregister || !host->nameplate_submit || !host->nameplate_measure_text) return;
+    if (!nameplate_api_available()) return;
     const auto caps = host->caps(host->host);
     if ((caps & canvas_caps) != canvas_caps) registered = false;
     else if (!enabled && registered) {
@@ -258,8 +265,11 @@ void refresh_registration() {
 } // namespace
 
 HAILSTONE_API void InitializePlugin() {
+    if (!nameplate_api_available() && HAILSTONE_HOST_HAS(host, log)) {
+        host->log(host->host, 2, "Crest Native requires a Hailstone build with the merged native nameplate SDK.");
+    }
     refresh_registration();
-    AddCommand("/crestnative", command, nullptr);
+    if (HAILSTONE_HOST_HAS(host, add_command)) AddCommand("/crestnative", command, nullptr);
 }
 
 HAILSTONE_API void ShutdownPlugin() {

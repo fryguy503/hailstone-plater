@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -40,6 +41,7 @@ struct FakeHost {
     unsigned registrations = 0;
     unsigned unregistrations = 0;
     unsigned measurements = 0;
+    unsigned warnings = 0;
     std::uint32_t caps = HAILSTONE_CAP_READ | HAILSTONE_CAP_UI | HAILSTONE_CAP_EXTEND |
                          HAILSTONE_CAP_COMMANDS | HAILSTONE_CAP_PACKETS;
     std::vector<Submission> submitted;
@@ -49,6 +51,9 @@ struct FakeHost {
         api.size = sizeof(api);
         api.host = this;
         api.caps = [](void* data) { return static_cast<FakeHost*>(data)->caps; };
+        api.log = [](void* data, int level, const char*) {
+            if (level == 2) ++static_cast<FakeHost*>(data)->warnings;
+        };
         api.add_command = [](void* data, const char* name, HailstoneCommandFn fn, void* user) {
             auto& self = *static_cast<FakeHost*>(data);
             require(std::string_view(name) == "/crestnative" && fn, "native command registration");
@@ -89,10 +94,14 @@ struct FakeHost {
                     model->candidate_index == self.submitted.size(), "model identifies the current frame and candidate");
             Submission result{model->flags, {}};
             if (!(model->flags & HAILSTONE_NAMEPLATE_HIDE)) {
-                require(model->commands && model->command_count && model->bounds.width > 0 && model->bounds.height > 0,
+                require(model->commands && model->command_count && model->bounds.width > 0 && model->bounds.height > 0 &&
+                        model->command_size == sizeof(HailstoneNameplateCommand),
                         "a visible model submits real geometry");
+                const auto* records = static_cast<const std::byte*>(model->commands);
                 for (std::uint32_t index = 0; index < model->command_count; ++index) {
-                    const auto& primitive = model->commands[index];
+                    HailstoneNameplateCommand primitive;
+                    std::memcpy(&primitive, records + static_cast<std::size_t>(index) * model->command_size,
+                                sizeof(primitive));
                     if (primitive.kind == HAILSTONE_NAMEPLATE_TEXT) {
                         require(primitive.text.data && primitive.text.bytes > 0, "valid borrowed command label");
                         result.labels.emplace_back(primitive.text.data, primitive.text.bytes);
@@ -109,13 +118,17 @@ struct FakeHost {
         command(command_data, argument);
     }
 
-    void render(const HailstoneNameplateCandidate& actor) {
+    void render_frame(const void* actors, std::uint32_t count, std::uint32_t stride) {
         require(provider != nullptr, "canvas provider was registered");
         measurements = 0;
         submitted.clear();
-        const HailstoneNameplateFrame frame{sizeof(HailstoneNameplateFrame), 1, frame_id, 50, 16, 14, 3,
-                                           {0, 0, 800, 600}, &actor};
+        const HailstoneNameplateFrame frame{sizeof(HailstoneNameplateFrame), count, stride, 0, frame_id,
+                                           50, 16, 14, 3, {0, 0, 800, 600}, actors};
         provider(provider_data, &frame);
+    }
+
+    void render(const HailstoneNameplateCandidate& actor) {
+        render_frame(&actor, 1, sizeof(actor));
     }
 
     void expect_labels(const std::vector<std::string>& labels) const {
@@ -126,14 +139,54 @@ struct FakeHost {
 };
 
 void older_host_is_safe() {
+    for (const auto host_size : {offsetof(PluginHostApi, nameplate_register),
+                                 offsetof(PluginHostApi, nameplate_spell_icon)}) {
+        FakeHost fake;
+        fake.api.size = static_cast<std::uint32_t>(host_size);
+        hailstone_plugin_set_host(&fake.api);
+        InitializePlugin();
+        OnPulse();
+        OnPulse();
+        require(fake.command && !fake.provider && fake.registrations == 0, "older ABI 3 keeps the stock canvas");
+        require(fake.warnings == 1, "missing canvas SDK only warns once per load");
+        ShutdownPlugin();
+        require(fake.unregistrations == 0, "older ABI 3 had nothing to unregister");
+        hailstone_plugin_set_host(nullptr);
+    }
+}
+
+void extended_candidate_stride() {
     FakeHost fake;
-    fake.api.size = offsetof(PluginHostApi, nameplate_register);
     hailstone_plugin_set_host(&fake.api);
     InitializePlugin();
-    OnPulse();
-    require(fake.command && !fake.provider && fake.registrations == 0, "older ABI 3 keeps the stock canvas");
+
+    struct FutureCandidate {
+        HailstoneNameplateCandidate known;
+        std::array<std::uint64_t, 4> future;
+    };
+    std::array<FutureCandidate, 2> actors{};
+    actors[0].known.flags = HAILSTONE_NAMEPLATE_NPC | HAILSTONE_NAMEPLATE_TARGET;
+    actors[0].known.spawn_id = 42;
+    actors[0].known.incarnation = 17;
+    actors[0].known.caption = {"First", 5};
+    actors[0].known.x = 200;
+    actors[0].known.y = 400;
+    actors[0].known.depth = 10;
+    actors[0].known.native_scale = 1;
+    actors[0].future.fill(UINT64_MAX);
+    actors[1].known = actors[0].known;
+    actors[1].known.flags = HAILSTONE_NAMEPLATE_NPC;
+    actors[1].known.spawn_id = 43;
+    actors[1].known.incarnation = 18;
+    actors[1].known.caption = {"Second", 6};
+    actors[1].known.x = 600;
+    fake.render_frame(actors.data(), static_cast<std::uint32_t>(actors.size()), sizeof(FutureCandidate));
+    require(fake.submitted.size() == 2 && fake.submitted[0].labels == std::vector<std::string>{"First"} &&
+            fake.submitted[1].labels == std::vector<std::string>{"Second"}, "step over extended records by the host stride");
+    fake.render_frame(actors.data(), static_cast<std::uint32_t>(actors.size()), 1);
+    require(fake.submitted.empty() && fake.measurements == 0, "missing candidate fields leave the stock canvas alone");
+
     ShutdownPlugin();
-    require(fake.unregistrations == 0, "older ABI 3 had nothing to unregister");
     hailstone_plugin_set_host(nullptr);
 }
 
@@ -226,6 +279,7 @@ int main() {
     try {
         require(hailstone_plugin_abi() == HAILSTONE_PLUGIN_ABI, "plugin reports its public SDK ABI");
         older_host_is_safe();
+        extended_candidate_stride();
         replacement_commands_and_packets();
         std::cout << "Crest native plugin smoke test passed\n";
         return 0;
