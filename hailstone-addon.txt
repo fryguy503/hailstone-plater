@@ -1,9 +1,11 @@
 hailstone-addon 1
 name crest
 kind plugin
-version 0.3.0-preview.6
+version 0.3.0-preview.7
 min_client 0.7.1-beta
 author Fryguy
-description Native Crest world nameplates for Hailstone with health, mana, casting and concealment cues.
+description Configurable native world nameplates for Hailstone with themes, profiles and optional server indicators.
 caps read,commands,ui,extend,packets
-package windows-x64 104596 b58303c037492f6051c8fb0d81c11641a2aa376e60890db35d444119959a8ba3 crest-0.3.0-preview.6-windows-x64.zip
+package linux-x64 201914 2e6ac4a79e7b456afd1e47d0f67a6da7616e04063a036f730c2ddb6c8f290af1 crest-0.3.0-preview.7-linux-x64.zip
+package macos-arm64 143740 e84ad8814d59b7e2a339625f0248ecd51921bb3489f1cbf000b6312f4c9d0f64 crest-0.3.0-preview.7-macos-arm64.zip
+package windows-x64 357987 185a7e85ce965f7c0319a3a302485ab591d7e418028c7450f4f7a8db4f5fec49 crest-0.3.0-preview.7-windows-x64.zip
