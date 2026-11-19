@@ -162,8 +162,8 @@ local function read_auras()
         if spell then
           local match=s.aura_mode=='all' or (s.aura_mode=='detrimental' and spell.spell_type==0)
           if s.aura_mode=='whitelist' then
-            for word in s.aura_names:gmatch('[^,]+') do
-              word=word:match('^%s*(.-)%s*$'):lower()
+            for entry in s.aura_names:gmatch('[^,]+') do
+              local word=entry:match('^%s*(.-)%s*$'):lower()
               if word~='' and spell.name:lower():find(word,1,true) then match=true; break end
             end
           end

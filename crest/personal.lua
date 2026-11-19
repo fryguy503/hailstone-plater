@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
-local C=require('crest.config')
+local C=require and require('crest.config') or dofile('crest/config.lua')
 local M={}
 function M.draw(ui,s,p,changed,spell)
   if not s.enabled or not s.personal_bar or not p or not p.in_zone or p.game_state~=5 then return end

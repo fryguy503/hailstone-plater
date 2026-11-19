@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: MIT
-local C=require('crest.config')
-local Colors=require('crest.colors')
+local C=require and require('crest.config') or dofile('crest/config.lua')
+local Colors=require and require('crest.colors') or dofile('crest/colors.lua')
 local M={}
 local sections={
   {'general','Visibility'}, {'layout','Layout'}, {'appearance','Texture, anchors & stacking'},

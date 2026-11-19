@@ -1,5 +1,13 @@
 # Changes
 
+## 0.3.0-preview.7
+
+- Added native Linux x64 and Apple Silicon macOS packages alongside Windows x64.
+- Restored the full configuration window, themes, saved profiles, ordered name rules and personal resource window in the DLL edition.
+- Restored native plate layouts, per-unit styling, visibility and click controls, cast customization, known auras, optional server indicators, and scoped group and extended-target resource observations.
+- Restored consider colors for name and level, below-bar level placement, and target chevrons that clear wide plates.
+- Added character saves and import of saved Lua Crest settings and profiles.
+
 ## 0.3.0-preview.6
 
 - Open native settings and show status in chat with `/crest`. Commands report the change in chat.

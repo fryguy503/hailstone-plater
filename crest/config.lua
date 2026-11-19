@@ -296,8 +296,8 @@ end
 function M.import(text)
   if type(text)~="string" or #text>32768 then return nil,"Profile text is too large." end
   local first, s, seen, lines = true, {rules={}}, {}, 0
-  for line in (text.."\n"):gmatch("([^\n]*)\n") do
-    line=line:gsub("\r$",""); lines=lines+1
+  for raw_line in (text.."\n"):gmatch("([^\n]*)\n") do
+    local line=raw_line:gsub("\r$",""); lines=lines+1
     if lines>512 then return nil,"Too many profile records." end
     if first then if line~="CREST1" then return nil,"Expected a CREST1 profile." end; first=false
     elseif line~="" then

@@ -1,26 +1,42 @@
-# Crest for Windows x64
+# Compiled Crest for Hailstone
 
-Crest draws world nameplates with names, known health and mana, observed casts, and five concealment display modes. Hailstone's native nameplate canvas handles depth, actor visibility, and manual clicks. Compatible servers can supply exact NPC concealment types through the optional packet permission.
+Crest draws configurable world nameplates with themes, per-unit styling, health and resource bars, observed casts, known auras, and optional server indicators. Hailstone's native nameplate canvas handles depth, actor visibility, and manual clicks.
 
 ## Install or switch from Lua Crest
 
-1. Start a Windows x64 Hailstone build with the merged native nameplate SDK. The downloadable `0.7.1-beta` predates this API. Compatible source builds can report the same version number.
+1. Start Hailstone with the merged native nameplate SDK on Windows x64, Linux x64, or Apple Silicon macOS. The published `0.7.1-beta` client predates this API. Compatible source builds can report the same version number.
 2. At the login screen, open **Add-ons → My add-ons** and remove the Lua `crest` entry if installed. Hailstone requires this one-time step to switch from a script to a compiled plugin. If you used the earlier `crest-native` preview, unload it so Crest has the nameplate canvas to itself.
-3. In **Add-ons**, paste the Crest repository link or the release link and install `crest`. This installs `crest.dll`. Use Hailstone's normal plugin controls if the server requires consent or manual loading.
+3. In **Add-ons**, paste the Crest repository link or the release link and install `crest`. Hailstone selects the package for your platform and installs `crest.dll`, `crest.so`, or `crest.dylib`. Use Hailstone's plugin controls if the server requires consent or manual loading.
 
-Type `/crest` in game to open the native settings window in Modern or Gamepad and get status in chat. The Plugins menu has a **Crest** shortcut, and **Options → Plugins** has an **Enable Crest nameplates** toggle.
+Type `/crest` in game to open the full configuration window in Modern or Gamepad. It includes **Settings**, **Unit types**, **Name rules**, **Profiles**, and **Preview & status**. The Plugins menu has a **Crest** shortcut, and **Options → Plugins** has an **Enable Crest nameplates** toggle.
 
-Use `/crest help` to list commands. `/crest parens` shows parentheses only, `/crest parens-tags` shows parentheses and type tags, `/crest tags` shows tags, `/crest suffix` adds a name suffix, and `/crest concealment-off` hides the cue. `/crest off` and `/crest on` disable or enable Crest nameplates. Changes apply to the current session.
+Changes save per character. On first use for a character, Crest imports recognized saved settings and named profiles from the matching Lua Crest file if one exists. The existing `CREST1` text format works for profile import and export.
 
-The native settings window controls the renderer and concealment display. Saved profiles, themes, name and level styling, auras, and supplemental group and extended-target resource readings are available in the Lua `v0.3.0-preview.4` release. To roll back, use a Hailstone build that runs Lua Preview 4, remove the native `crest` entry in **My add-ons**, and install from the Lua release tag. The merged SDK test build rejects Preview 4 during Lua compilation. Keep your working Lua installation on other platforms or Hailstone builds without the native SDK.
+Use `/crest help` to list commands. `/crest parens` shows parentheses only, `/crest parens-tags` shows parentheses and type tags, `/crest tags` shows tags, `/crest suffix` adds a name suffix, and `/crest concealment-off` hides the cue. Use `/crest on`, `off`, `toggle`, `save`, or `status` for common actions. `/crest stop` suspends the renderer until you run `/crest on` or reload the add-on.
 
 ## Build and package
 
-Run from the Crest checkout with a C++20 toolchain:
+Run from the Crest checkout with CMake 3.25 or later, a C++20 toolchain, and Python 3.8 or later:
 
-```powershell
-cmake -S native -B native/build -DHAILSTONE_SDK_DIR=<path-to-hailstone-sdk>
+```sh
+cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release -DHAILSTONE_SDK_DIR=<path-to-hailstone-sdk>
 cmake --build native/build --config Release
 ctest --test-dir native/build -C Release --output-on-failure
-python native/tools/package.py --client-source <path-to-hailstone-source> --build-dir native/build --out native/release/0.3.0-preview.6
+```
+
+Build on Windows x64, Linux x64 (Ubuntu 24.04 baseline), and Apple Silicon macOS. The macOS library targets macOS 13.3 or later. Sign it ad hoc and verify it before packaging.
+
+```sh
+codesign --force --sign - --timestamp=none path/to/crest.dylib
+codesign --verify --strict path/to/crest.dylib
+```
+
+The **Crest native builds** workflow compiles, tests, and checks that each library loads on its target OS. To assemble its three artifacts into a single Hailstone manifest and the platform ZIPs, run:
+
+```sh
+python native/tools/package.py --client-source <path-to-hailstone-source> \
+  --platform windows-x64=path/to/crest.dll \
+  --platform linux-x64=path/to/crest.so \
+  --platform macos-arm64=path/to/crest.dylib \
+  --out native/release/0.3.0-preview.7
 ```

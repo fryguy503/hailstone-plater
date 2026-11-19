@@ -1,10 +1,8 @@
 # Hailstone Crest
 
-Crest is a Windows x64 DLL that uses Hailstone's native nameplate canvas. See the [native install and compatibility guide](native/README.md) before switching from Lua Crest. The tagged Lua release `v0.3.0-preview.4` is available for Lua users.
+Crest is a compiled add-on for Windows x64, Linux x64, and Apple Silicon macOS. It uses Hailstone's native nameplate canvas. Type `/crest` to open the full configuration window. See the [native install and compatibility guide](native/README.md) for the supported clients and how to carry over your Lua settings.
 
-## Lua Preview 4 guide
-
-The Lua edition contains its own renderer, visual themes, settings, rules, indicators and profiles. It requires Hailstone's generic nameplate canvas API 1 and managed Lua add-on support. Use the **Enabled** switch in Add-ons, then open settings from the in-game **Crest** menu or `/crest`.
+The archived Lua release is available as `v0.3.0-preview.4` for Hailstone builds that support it.
 
 ## Complete visual themes
 
@@ -32,11 +30,11 @@ Tank, Healer, Large, Cast Focus, Raid and Classic Names provide six additional r
 - Under **Text**, enable **Color name and level by con** to use the actor's consider color for those labels. Set **Level position** to **below** to place the level directly under the health bar.
 - Settings cover per-unit appearances, combat/rest/target styling, health/mana/endurance, cast timing, known auras, numeric/shared marks, low-health and aggro emphasis, bounded stacking, a personal resource window, literal name rules and profile import/export.
 
-Settings are kept separately per server/world/character. Up to sixteen named profiles and sixty-four ordered literal name rules are supported. Profile imports are bounded data, not executable scripts. In crowded frames, Crest prioritizes the target and nearer plates and skips overflow to stay within Hailstone's Lua callback limit.
+Settings are kept separately per server, world, and character. Up to sixteen named profiles and sixty-four ordered literal name rules are supported. Profile imports contain bounded data. In crowded frames, Crest prioritizes the target and nearer plates within the native canvas drawing budget.
 
 ## Managed add-on behavior
 
-Crest is an installed add-on, with an **Enabled** switch in **Add-ons > My add-ons**. Its renderer, bars, icons, layout, stacking, UI and rules all ship in Crest’s Lua sandbox. The shared host API supplies filtered world anchors, clipping/depth and guarded physical input. Users do not need to start a loose script or enter `/lua run`.
+Crest installs as a managed add-on with an **Enabled** switch in **Add-ons → My add-ons**. The DLL handles packet observations, world-plate geometry, rendering and stacking. Modern and Gamepad use the bundled settings panel. Hailstone supplies filtered world anchors, clipping, depth and guarded manual input.
 
 Disabling/removing the managed add-on removes its presentation hooks and hit areas. Updating it preserves the activation choice. Capability ceilings and server policy still apply. Release publication is separate from source development and local packaging.
 
@@ -56,7 +54,9 @@ The declared capabilities are `read,commands,ui,extend,packets`. `packets` is op
 
 ## Authoring and validation
 
-Build the add-on with Hailstone’s official packager:
+See the [native guide](native/README.md) for the DLL build, native tests and packaging commands.
+
+To build the archived Lua edition from source, use Hailstone’s official packager:
 
 ```powershell
 python tools/package.py --client-source <compatible-hailstone-source> --lua lua

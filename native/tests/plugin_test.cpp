@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "hailstone_plugin.h"
+#include "settings.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -25,6 +27,7 @@ struct HailstoneArgs { std::vector<HailstoneValue> values; };
 struct HailstoneOut {
     std::string key;
     std::map<std::string, HailstoneValue> fields;
+    std::map<std::string, std::string> texts;
 };
 
 namespace {
@@ -106,6 +109,7 @@ struct FakeHost {
         api.out_key = [](void*, HailstoneOut* out, const char* key) { out->key = key; };
         api.out_value = [](void*, HailstoneOut* out, const HailstoneValue* value) {
             out->fields[out->key] = *value;
+            if (value->kind == HAILSTONE_STRING && value->s) out->texts[out->key] = value->s;
         };
         api.nameplate_register = [](void* data, HailstoneNameplateFn fn, void* user) {
             auto& self = *static_cast<FakeHost*>(data);
@@ -150,7 +154,8 @@ struct FakeHost {
                                 sizeof(primitive));
                     if (primitive.kind == HAILSTONE_NAMEPLATE_TEXT) {
                         require(primitive.text.data && primitive.text.bytes > 0, "valid borrowed command label");
-                        result.labels.emplace_back(primitive.text.data, primitive.text.bytes);
+                        if (primitive.color != 0)
+                            result.labels.emplace_back(primitive.text.data, primitive.text.bytes);
                     }
                 }
             }
@@ -177,10 +182,13 @@ struct FakeHost {
         render_frame(&actor, 1, sizeof(actor));
     }
 
-    void expect_labels(const std::vector<std::string>& labels) const {
+    void expect_labels(std::vector<std::string> labels) const {
+        auto observed = submitted.empty() ? std::vector<std::string>{} : submitted.front().labels;
+        std::sort(labels.begin(), labels.end());
+        std::sort(observed.begin(), observed.end());
         require(submitted.size() == 1 && submitted.front().flags == HAILSTONE_NAMEPLATE_CLICKABLE &&
-                submitted.front().labels == labels, "visible labels match the configured display");
-        require(measurements == labels.size(), "each submitted label used the host font metrics");
+                observed == labels, "visible labels match the configured display");
+        require(measurements >= labels.size(), "submitted labels used the host font metrics");
     }
 };
 
@@ -333,23 +341,40 @@ void controls_are_visible_and_share_state() {
     };
     const auto set = [&](const char* key, int kind, std::int64_t value) {
         const HailstoneArgs args{{{HAILSTONE_STRING, 0, 0, key}, {kind, value, 0, nullptr}}};
-        fake.ui_functions.at("set_setting")(nullptr, &args, nullptr);
+        HailstoneOut out;
+        fake.ui_functions.at("set_setting")(nullptr, &args, &out);
+        return out.fields.at("").i != 0;
+    };
+    const auto config = [&] {
+        HailstoneOut out;
+        fake.ui_functions.at("get_config")(nullptr, nullptr, &out);
+        return crest::Settings::import(out.texts.at(""));
+    };
+    const auto replace = [&](const char* text) {
+        const HailstoneArgs args{{{HAILSTONE_STRING, 0, 0, text}}};
+        HailstoneOut out;
+        fake.ui_functions.at("replace_settings")(nullptr, &args, &out);
+        return out.fields.at("").i != 0;
     };
     require(!settings().at("open").i, "the settings window starts closed");
     fake.run_command("");
     require(settings().at("open").i && settings().at("available").i && !fake.chat.empty(),
             "bare /crest opens the window and reports status in chat");
-    set("mode", HAILSTONE_INT, 3);
-    set("mode", HAILSTONE_INT, 5);
+    const auto original_revision = settings().at("revision").i;
+    require(replace("CREST1\nconcealment_display=Name suffix\nwidth=260\ncon_name_color=true\nlevel_position=below"),
+            "valid full settings are accepted");
+    require(!replace("CREST1\nconcealment_display=Invalid"), "invalid settings are rejected as a unit");
     fake.run_command("status");
-    require(settings().at("mode").i == 3 && fake.chat.back().find("Name suffix") != std::string::npos,
-            "valid mode changes are visible and invalid indices are ignored");
-    set("open", HAILSTONE_BOOL, 0);
+    const auto updated = config();
+    require(updated && updated->number("width") == 260 && updated->boolean("con_name_color") &&
+            updated->text("level_position") == "below" && settings().at("revision").i > original_revision &&
+            fake.chat.back().find("Name suffix") != std::string::npos, "the whole panel and slash commands share settings");
+    require(set("open", HAILSTONE_BOOL, 0), "settings UI can close the window");
     require(!settings().at("open").i, "closing the settings window clears native open state");
     fake.option_set(nullptr, 0);
     OnPulse();
     require(!settings().at("enabled").i && !fake.provider, "the Plugins toggle releases the provider");
-    set("enabled", HAILSTONE_BOOL, 1);
+    require(replace("CREST1\nenabled=true"), "settings window can re-enable the renderer");
     OnPulse();
     require(fake.option_get(nullptr) == 1 && fake.provider, "the settings window and Plugins toggle share state");
     fake.run_command("help");
