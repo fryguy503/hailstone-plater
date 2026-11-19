@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -19,6 +20,12 @@ extern "C" void ShutdownPlugin();
 extern "C" void OnPulse();
 extern "C" void OnBeginZone();
 extern "C" int OnPacket(int stream, int direction, HailstonePacket* packet);
+
+struct HailstoneArgs { std::vector<HailstoneValue> values; };
+struct HailstoneOut {
+    std::string key;
+    std::map<std::string, HailstoneValue> fields;
+};
 
 namespace {
 
@@ -42,8 +49,13 @@ struct FakeHost {
     unsigned unregistrations = 0;
     unsigned measurements = 0;
     unsigned warnings = 0;
+    unsigned option_registrations = 0, menu_registrations = 0;
+    HailstoneOptionGetFn option_get = nullptr;
+    HailstoneOptionSetFn option_set = nullptr;
     std::uint32_t caps = HAILSTONE_CAP_READ | HAILSTONE_CAP_UI | HAILSTONE_CAP_EXTEND |
                          HAILSTONE_CAP_COMMANDS | HAILSTONE_CAP_PACKETS;
+    std::vector<std::string> chat;
+    std::map<std::string, HailstoneUiFn> ui_functions;
     std::vector<Submission> submitted;
 
     FakeHost() {
@@ -54,12 +66,46 @@ struct FakeHost {
         api.log = [](void* data, int level, const char*) {
             if (level == 2) ++static_cast<FakeHost*>(data)->warnings;
         };
+        api.write_chat = [](void* data, const char* text, std::uint32_t) {
+            static_cast<FakeHost*>(data)->chat.emplace_back(text);
+        };
         api.add_command = [](void* data, const char* name, HailstoneCommandFn fn, void* user) {
             auto& self = *static_cast<FakeHost*>(data);
             require(std::string_view(name) == "/crest" && fn, "native command registration");
             self.command = fn;
             self.command_data = user;
             return 1;
+        };
+        api.add_option = [](void* data, const char* name, const char*, int min, int max,
+                            HailstoneOptionGetFn get, HailstoneOptionSetFn set, void*) {
+            auto& self = *static_cast<FakeHost*>(data);
+            require(std::string_view(name) == "enabled" && min == 0 && max == 1 && get && set,
+                    "the native options panel exposes an enable switch");
+            ++self.option_registrations;
+            self.option_get = get;
+            self.option_set = set;
+            return 1;
+        };
+        api.add_menu = [](void* data, const char* label, const char* action) {
+            require(std::string_view(label) == "Crest" && std::string_view(action) == "/crest",
+                    "the Plugins menu opens Crest settings");
+            ++static_cast<FakeHost*>(data)->menu_registrations;
+            return 1;
+        };
+        api.add_ui_function = [](void* data, const char* name, HailstoneUiFn function, void*) {
+            static_cast<FakeHost*>(data)->ui_functions[name] = function;
+            return 1;
+        };
+        api.arg = [](void*, const HailstoneArgs* args, std::size_t i, HailstoneValue* value) {
+            if (i >= args->values.size()) return 0;
+            *value = args->values[i];
+            return 1;
+        };
+        api.out_begin_table = [](void*, HailstoneOut*) {};
+        api.out_end = [](void*, HailstoneOut*) {};
+        api.out_key = [](void*, HailstoneOut* out, const char* key) { out->key = key; };
+        api.out_value = [](void*, HailstoneOut* out, const HailstoneValue* value) {
+            out->fields[out->key] = *value;
         };
         api.nameplate_register = [](void* data, HailstoneNameplateFn fn, void* user) {
             auto& self = *static_cast<FakeHost*>(data);
@@ -273,6 +319,45 @@ void replacement_commands_and_packets() {
     hailstone_plugin_set_host(nullptr);
 }
 
+void controls_are_visible_and_share_state() {
+    FakeHost fake;
+    hailstone_plugin_set_host(&fake.api);
+    InitializePlugin();
+    OnPulse();
+    require(fake.option_registrations == 1 && fake.menu_registrations == 1,
+            "Crest appears in Plugins options and the Plugins menu once");
+    const auto settings = [&] {
+        HailstoneOut out;
+        require(fake.ui_functions.at("settings")(nullptr, nullptr, &out) == 1, "the settings UI can read state");
+        return out.fields;
+    };
+    const auto set = [&](const char* key, int kind, std::int64_t value) {
+        const HailstoneArgs args{{{HAILSTONE_STRING, 0, 0, key}, {kind, value, 0, nullptr}}};
+        fake.ui_functions.at("set_setting")(nullptr, &args, nullptr);
+    };
+    require(!settings().at("open").i, "the settings window starts closed");
+    fake.run_command("");
+    require(settings().at("open").i && settings().at("available").i && !fake.chat.empty(),
+            "bare /crest opens the window and reports status in chat");
+    set("mode", HAILSTONE_INT, 3);
+    set("mode", HAILSTONE_INT, 5);
+    fake.run_command("status");
+    require(settings().at("mode").i == 3 && fake.chat.back().find("Name suffix") != std::string::npos,
+            "valid mode changes are visible and invalid indices are ignored");
+    set("open", HAILSTONE_BOOL, 0);
+    require(!settings().at("open").i, "closing the settings window clears native open state");
+    fake.option_set(nullptr, 0);
+    OnPulse();
+    require(!settings().at("enabled").i && !fake.provider, "the Plugins toggle releases the provider");
+    set("enabled", HAILSTONE_BOOL, 1);
+    OnPulse();
+    require(fake.option_get(nullptr) == 1 && fake.provider, "the settings window and Plugins toggle share state");
+    fake.run_command("help");
+    require(fake.chat.back().find("/crest on") != std::string::npos, "command help goes to chat");
+    ShutdownPlugin();
+    hailstone_plugin_set_host(nullptr);
+}
+
 } // namespace
 
 int main() {
@@ -281,6 +366,7 @@ int main() {
         older_host_is_safe();
         extended_candidate_stride();
         replacement_commands_and_packets();
+        controls_are_visible_and_share_state();
         std::cout << "Crest native plugin smoke test passed\n";
         return 0;
     } catch (const std::exception& error) {

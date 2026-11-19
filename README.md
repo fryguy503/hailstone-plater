@@ -1,6 +1,6 @@
 # Hailstone Crest
 
-Crest Preview 5 is a Windows x64 DLL that uses Hailstone's native nameplate canvas. See the [native install and compatibility guide](native/README.md) before switching from Lua Crest. The tagged Lua release `v0.3.0-preview.4` is available for Lua users.
+Crest is a Windows x64 DLL that uses Hailstone's native nameplate canvas. See the [native install and compatibility guide](native/README.md) before switching from Lua Crest. The tagged Lua release `v0.3.0-preview.4` is available for Lua users.
 
 ## Lua Preview 4 guide
 

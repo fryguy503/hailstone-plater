@@ -13,7 +13,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 NAME = 'crest'
-VERSION = '0.3.0-preview.5'
+VERSION = '0.3.0-preview.6'
 PLATFORM = 'windows-x64'
 MIN_CLIENT = '0.7.1-beta'
 CAPS = 'read,commands,ui,extend,packets'
@@ -74,13 +74,17 @@ def package(client_source, build_dir, out):
     validate_windows_dll(dll_bytes)
     payload = {DLL: dll_bytes, 'LICENSE': (ROOT / 'LICENSE').read_bytes(),
                'README.md': (ROOT / 'native' / 'README.md').read_bytes()}
+    panel = (ROOT / 'native' / 'ui' / 'crest.lua').read_bytes()
+    for pack in ('modern', 'gamepad'):
+        payload[f'ui/{pack}/crest.lua'] = panel
 
     with tempfile.TemporaryDirectory(prefix='crest-native-package-') as staging_directory:
         staging = Path(staging_directory)
         source = staging / 'payload'
-        source.mkdir()
         for name, data in payload.items():
-            (source / name).write_bytes(data)
+            destination = source / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(data)
         assets = staging / 'assets'
         subprocess.run([sys.executable, str(packager), '--name', NAME, '--kind', 'plugin', '--version', VERSION,
                         '--min-client', MIN_CLIENT, '--caps', CAPS, '--author', AUTHOR, '--description', DESCRIPTION,

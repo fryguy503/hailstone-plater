@@ -1,5 +1,10 @@
 # Changes
 
+## 0.3.0-preview.6
+
+- Open native settings and show status in chat with `/crest`. Commands report the change in chat.
+- Added a Crest menu shortcut and an enable toggle in the stock Plugins options.
+
 ## 0.3.0-preview.5
 
 - Published the Windows x64 DLL as the default Crest package. It requires a Hailstone build with the merged native canvas SDK.

@@ -27,8 +27,10 @@ constexpr std::uint32_t dark = 0x111823, white = 0xf2f5fa;
 constexpr std::uint32_t hp_color = 0xe5b454, mana_color = 0x4d94ff, cast_color = 0xf4bb55;
 
 enum class ConcealmentDisplay { ParenthesesTags, ParenthesesOnly, Tags, Suffix, Off };
+constexpr std::array mode_names{"Parentheses + tags", "Parentheses only", "Tags", "Name suffix", "Off"};
 ConcealmentDisplay concealment_display = ConcealmentDisplay::ParenthesesTags;
 bool enabled = true, registered = false, packets_allowed = false;
+bool settings_open = false, ui_registered = false;
 crest::ServerIndicators indicators;
 std::unordered_map<std::uint32_t, std::uint64_t> incarnations;
 
@@ -228,23 +230,87 @@ void canvas(void*, const HailstoneNameplateFrame* frame) {
     }
 }
 
+bool nameplate_api_available() {
+    // Older hosts report ABI 3 too. Check the entire current table prefix before
+    // accessing its nameplate slots.
+    return HAILSTONE_HOST_HAS(host, nameplate_spell_icon) && host->caps && host->nameplate_register &&
+           host->nameplate_unregister && host->nameplate_submit && host->nameplate_measure_text;
+}
+
+void reply(std::string_view message) {
+    const auto text = std::string("[Crest] ") + std::string(message);
+    if (HAILSTONE_HOST_HAS(host, write_chat)) host->write_chat(host->host, text.c_str(), 0);
+    else if (HAILSTONE_HOST_HAS(host, log)) host->log(host->host, 1, text.c_str());
+}
+
 void command(void*, const char* argument) {
     const std::string_view value = argument ? argument : "";
-    if (value == "on") enabled = true;
+    if (value.empty()) settings_open = true;
+    else if (value == "on") enabled = true;
     else if (value == "off") enabled = false;
     else if (value == "parens-tags") concealment_display = ConcealmentDisplay::ParenthesesTags;
     else if (value == "parens") concealment_display = ConcealmentDisplay::ParenthesesOnly;
     else if (value == "tags") concealment_display = ConcealmentDisplay::Tags;
     else if (value == "suffix") concealment_display = ConcealmentDisplay::Suffix;
     else if (value == "concealment-off") concealment_display = ConcealmentDisplay::Off;
-    else if (host->log) host->log(host->host, 1, "Crest: /crest on|off|parens-tags|parens|tags|suffix|concealment-off");
+    else if (value != "status") {
+        reply("Commands are /crest on, off, parens-tags, parens, tags, suffix, concealment-off, or status.");
+        return;
+    }
+    if (!nameplate_api_available()) {
+        reply("This Hailstone build needs the native nameplate SDK to draw Crest plates.");
+        return;
+    }
+    const auto mode = mode_names[static_cast<std::size_t>(concealment_display)];
+    reply(std::string(enabled ? "Nameplates enabled. " : "Nameplates disabled. ") + "Concealment display is " + mode + ".");
 }
 
-bool nameplate_api_available() {
-    // Older hosts report ABI 3 too. Check the entire current table prefix before
-    // accessing its nameplate slots.
-    return HAILSTONE_HOST_HAS(host, nameplate_spell_icon) && host->caps && host->nameplate_register &&
-           host->nameplate_unregister && host->nameplate_submit && host->nameplate_measure_text;
+int ui_settings(void*, const HailstoneArgs*, HailstoneOut* out) {
+    const auto field = [out](const char* key, int type, std::int64_t value) {
+        const HailstoneValue result{type, value, 0, nullptr};
+        host->out_key(host->host, out, key);
+        host->out_value(host->host, out, &result);
+    };
+    host->out_begin_table(host->host, out);
+    field("open", HAILSTONE_BOOL, settings_open);
+    field("enabled", HAILSTONE_BOOL, enabled);
+    field("mode", HAILSTONE_INT, static_cast<int>(concealment_display));
+    field("available", HAILSTONE_BOOL, nameplate_api_available());
+    host->out_end(host->host, out);
+    return 1;
+}
+
+int ui_set_setting(void*, const HailstoneArgs* args, HailstoneOut*) {
+    HailstoneValue key{}, value{};
+    if (!host->arg(host->host, args, 0, &key) || key.kind != HAILSTONE_STRING || !key.s ||
+        !host->arg(host->host, args, 1, &value)) return 0;
+    const std::string_view option = key.s;
+    if (option == "open" && value.kind == HAILSTONE_BOOL) settings_open = value.i != 0;
+    else if (option == "enabled" && value.kind == HAILSTONE_BOOL) enabled = value.i != 0;
+    else if (option == "mode" && value.kind == HAILSTONE_INT && value.i >= 0 &&
+             value.i < static_cast<std::int64_t>(mode_names.size()))
+        concealment_display = static_cast<ConcealmentDisplay>(value.i);
+    return 0;
+}
+
+void refresh_ui() {
+    if (!HAILSTONE_HOST_HAS(host, caps) || !(host->caps(host->host) & HAILSTONE_CAP_UI)) {
+        ui_registered = false;
+        settings_open = false;
+        return;
+    }
+    if (ui_registered) return;
+    if (HAILSTONE_HOST_HAS(host, add_ui_function) && HAILSTONE_HOST_HAS(host, arg) &&
+        HAILSTONE_HOST_HAS(host, out_begin_table) && HAILSTONE_HOST_HAS(host, out_end) &&
+        HAILSTONE_HOST_HAS(host, out_key) && HAILSTONE_HOST_HAS(host, out_value)) {
+        host->add_ui_function(host->host, "settings", ui_settings, nullptr);
+        host->add_ui_function(host->host, "set_setting", ui_set_setting, nullptr);
+    }
+    if (HAILSTONE_HOST_HAS(host, add_option))
+        host->add_option(host->host, "enabled", "Enable Crest nameplates", 0, 1,
+                         [](void*) -> int { return enabled; }, [](void*, int value) { enabled = value != 0; }, nullptr);
+    if (HAILSTONE_HOST_HAS(host, add_menu)) host->add_menu(host->host, "Crest", "/crest");
+    ui_registered = true;
 }
 
 void refresh_registration() {
@@ -270,16 +336,22 @@ HAILSTONE_API void InitializePlugin() {
     }
     refresh_registration();
     if (HAILSTONE_HOST_HAS(host, add_command)) AddCommand("/crest", command, nullptr);
+    refresh_ui();
 }
 
 HAILSTONE_API void ShutdownPlugin() {
     if (registered && HAILSTONE_HOST_HAS(host, nameplate_unregister)) host->nameplate_unregister(host->host);
     registered = false;
     packets_allowed = false;
+    settings_open = false;
+    ui_registered = false;
     reset_observations();
 }
 
-HAILSTONE_API void OnPulse() { refresh_registration(); }
+HAILSTONE_API void OnPulse() {
+    refresh_registration();
+    refresh_ui();
+}
 
 HAILSTONE_API void OnBeginZone() { reset_observations(); }
 
