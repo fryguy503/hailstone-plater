@@ -40,16 +40,15 @@ struct FakeHost {
     unsigned registrations = 0;
     unsigned unregistrations = 0;
     unsigned measurements = 0;
+    std::uint32_t caps = HAILSTONE_CAP_READ | HAILSTONE_CAP_UI | HAILSTONE_CAP_EXTEND |
+                         HAILSTONE_CAP_COMMANDS | HAILSTONE_CAP_PACKETS;
     std::vector<Submission> submitted;
 
     FakeHost() {
         api.abi = HAILSTONE_PLUGIN_ABI;
         api.size = sizeof(api);
         api.host = this;
-        api.caps = [](void*) -> std::uint32_t {
-            return HAILSTONE_CAP_READ | HAILSTONE_CAP_UI | HAILSTONE_CAP_EXTEND |
-                   HAILSTONE_CAP_COMMANDS | HAILSTONE_CAP_PACKETS;
-        };
+        api.caps = [](void* data) { return static_cast<FakeHost*>(data)->caps; };
         api.add_command = [](void* data, const char* name, HailstoneCommandFn fn, void* user) {
             auto& self = *static_cast<FakeHost*>(data);
             require(std::string_view(name) == "/crestnative" && fn, "native command registration");
@@ -149,6 +148,7 @@ void replacement_commands_and_packets() {
     actor.flags = HAILSTONE_NAMEPLATE_NPC | HAILSTONE_NAMEPLATE_TARGET | HAILSTONE_NAMEPLATE_HP_KNOWN |
                   HAILSTONE_NAMEPLATE_CONCEALED | HAILSTONE_NAMEPLATE_INVISIBLE | HAILSTONE_NAMEPLATE_INVISIBLE_UNDEAD;
     actor.spawn_id = 42;
+    actor.incarnation = 17;
     actor.caption = {"Crypt Guardian", 14};
     actor.x = 400;
     actor.y = 400;
@@ -178,6 +178,29 @@ void replacement_commands_and_packets() {
     require(OnPacket(HAILSTONE_STREAM_ZONE, HAILSTONE_IN, &packet) == 0 && bytes == original &&
             packet.opcode == 0x7d1d && packet.size == bytes.size() && packet.data == bytes.data(),
             "inbound observation leaves the packet untouched");
+    fake.render(actor);
+    fake.expect_labels({"80%", "(Crypt Guardian)", "IVU"});
+
+    // A full same-ID replacement does not have to emit a separate despawn.
+    ++actor.incarnation;
+    fake.render(actor);
+    fake.expect_labels({"80%", "Crypt Guardian"});
+    bytes[8] = 2;
+    OnPacket(HAILSTONE_STREAM_ZONE, HAILSTONE_IN, &packet);
+    fake.render(actor);
+    fake.expect_labels({"80%", "(Crypt Guardian)", "IVU"});
+
+    fake.caps &= ~HAILSTONE_CAP_PACKETS;
+    OnPulse();
+    fake.render(actor);
+    fake.expect_labels({"80%", "Crypt Guardian"});
+    fake.caps |= HAILSTONE_CAP_PACKETS;
+    OnPulse();
+    fake.render(actor);
+    fake.expect_labels({"80%", "Crypt Guardian"});
+
+    OnBeginZone();
+    OnPacket(HAILSTONE_STREAM_ZONE, HAILSTONE_IN, &packet);
     fake.render(actor);
     fake.expect_labels({"80%", "(Crypt Guardian)", "IVU"});
     OnBeginZone();

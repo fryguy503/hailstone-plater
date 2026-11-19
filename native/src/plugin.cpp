@@ -13,6 +13,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 HAILSTONE_PLUGIN
@@ -21,6 +22,7 @@ namespace {
 using Clock = std::chrono::steady_clock;
 using namespace std::chrono_literals;
 constexpr auto canvas_caps = HAILSTONE_CAP_READ | HAILSTONE_CAP_UI | HAILSTONE_CAP_EXTEND;
+constexpr std::size_t max_observed_actors = 1024;
 constexpr std::uint32_t dark = 0x111823, white = 0xf2f5fa;
 constexpr std::uint32_t hp_color = 0xe5b454, mana_color = 0x4d94ff, cast_color = 0xf4bb55;
 
@@ -28,6 +30,31 @@ enum class ConcealmentDisplay { ParenthesesTags, ParenthesesOnly, Tags, Suffix, 
 ConcealmentDisplay concealment_display = ConcealmentDisplay::ParenthesesTags;
 bool enabled = true, registered = false, packets_allowed = false;
 crest::ServerIndicators indicators;
+std::unordered_map<std::uint32_t, std::uint64_t> incarnations;
+
+void reset_observations() {
+    indicators.reset();
+    incarnations.clear();
+}
+
+void forget_actor(std::uint32_t id) {
+    indicators.remove(id);
+    incarnations.erase(id);
+}
+
+void observe_actor(const HailstoneNameplateCandidate& actor) {
+    if (!packets_allowed || !(actor.flags & HAILSTONE_NAMEPLATE_NPC) || !actor.spawn_id || !actor.incarnation) return;
+    const auto previous = incarnations.find(actor.spawn_id);
+    if (previous != incarnations.end()) {
+        if (previous->second == actor.incarnation) return;
+        // A full spawn replacement can reuse the ID without an OnRemoveSpawn event.
+        indicators.remove(actor.spawn_id);
+        previous->second = actor.incarnation;
+        return;
+    }
+    if (incarnations.size() >= max_observed_actors) reset_observations();
+    incarnations.emplace(actor.spawn_id, actor.incarnation);
+}
 
 std::uint64_t now_ms() {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -44,7 +71,7 @@ ConcealmentTag concealment(const HailstoneNameplateCandidate& candidate, std::ui
     const auto flags = candidate.flags;
     const auto observed = static_cast<std::uint8_t>(((flags & HAILSTONE_NAMEPLATE_INVISIBLE) ? 1 : 0) |
                                                     ((flags & HAILSTONE_NAMEPLATE_INVISIBLE_UNDEAD) ? 2 : 0));
-    const auto reported = packets_allowed && (flags & HAILSTONE_NAMEPLATE_NPC)
+    const auto reported = packets_allowed && candidate.incarnation && (flags & HAILSTONE_NAMEPLATE_NPC)
         ? indicators.concealment(candidate.spawn_id, now) : std::nullopt;
     switch (reported.value_or(observed)) {
     case 1: return {"INV", 0x79def3};
@@ -166,6 +193,7 @@ void canvas(void*, const HailstoneNameplateFrame* frame) {
     std::vector<bool> available(frame->candidate_count, true);
     for (std::uint32_t index = 0; index < frame->candidate_count; ++index) {
         const auto& actor = frame->candidates[index];
+        observe_actor(actor);
         auto& item = layout[index];
         item.x = actor.x; item.y = actor.y; item.depth = actor.depth; item.id = actor.spawn_id;
         item.target = (actor.flags & HAILSTONE_NAMEPLATE_TARGET) != 0;
@@ -222,8 +250,9 @@ void refresh_registration() {
     } else if (enabled && !registered) {
         registered = host->nameplate_register(host->host, canvas, nullptr) != 0;
     }
-    const bool new_packets = (caps & HAILSTONE_CAP_PACKETS) != 0;
-    if (!new_packets && packets_allowed) indicators.reset();
+    constexpr auto observation_caps = canvas_caps | HAILSTONE_CAP_PACKETS;
+    const bool new_packets = (caps & observation_caps) == observation_caps;
+    if (!new_packets && packets_allowed) reset_observations();
     packets_allowed = new_packets;
 }
 } // namespace
@@ -237,19 +266,19 @@ HAILSTONE_API void ShutdownPlugin() {
     if (registered && HAILSTONE_HOST_HAS(host, nameplate_unregister)) host->nameplate_unregister(host->host);
     registered = false;
     packets_allowed = false;
-    indicators.reset();
+    reset_observations();
 }
 
 HAILSTONE_API void OnPulse() { refresh_registration(); }
 
-HAILSTONE_API void OnBeginZone() { indicators.reset(); }
+HAILSTONE_API void OnBeginZone() { reset_observations(); }
 
-HAILSTONE_API void OnRemoveSpawn(std::uint32_t id) { indicators.remove(id); }
+HAILSTONE_API void OnRemoveSpawn(std::uint32_t id) { forget_actor(id); }
 
 HAILSTONE_API int OnPacket(int stream, int direction, HailstonePacket* packet) {
-    if (stream != HAILSTONE_STREAM_ZONE || direction != HAILSTONE_IN || !packet || !packet->data) return 0;
+    if (!packets_allowed || stream != HAILSTONE_STREAM_ZONE || direction != HAILSTONE_IN || !packet || !packet->data) return 0;
     const auto bytes = std::as_bytes(std::span{packet->data, packet->size});
     if (packet->opcode == 0x7d1c || packet->opcode == 0x7d1d) indicators.receive(packet->opcode, bytes, now_ms());
-    if (packet->opcode == 0x7280 && bytes.size() >= 4) indicators.remove(crest::wire::le32(bytes, 0));
+    if (packet->opcode == 0x7280 && bytes.size() >= 4) forget_actor(crest::wire::le32(bytes, 0));
     return 0;
 }
