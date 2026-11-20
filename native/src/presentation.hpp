@@ -32,7 +32,7 @@ struct PlateObservations {
     std::optional<double> current_hp, max_hp, remote_mana, remote_endurance;
     std::optional<std::uint32_t> con_color;
     std::optional<std::uint8_t> npc_concealment;
-    std::string_view guild_caption;
+    std::string_view secondary_caption;
     std::span<const PlateBadge> server_indicators, auras;
 };
 

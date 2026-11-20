@@ -3,6 +3,7 @@
 ## 0.3.0-preview.8
 
 - Player plates follow Hailstone's `/show` modes for surnames, titles, and suffixes. Guild tags appear when the client supplies its guild caption to Crest.
+- Added server-supplied NPC descriptions beneath NPC names. Pet owner names follow the client setting when Hailstone supplies the caption.
 
 ## 0.3.0-preview.7
 

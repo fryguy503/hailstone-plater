@@ -200,7 +200,7 @@ void player_guild_layout_and_concealment()
                      HAILSTONE_NAMEPLATE_INVISIBLE_UNDEAD;
     f.actor.spawn_name = borrowed("Edric");
     f.actor.caption = borrowed("Sir ([Edric]) Vale III");
-    f.observation.guild_caption = "<Ice Guard>";
+    f.observation.secondary_caption = "<Ice Guard>";
     check(f.settings.set_text("width", "300"), "allow room for name and health text");
     for (const auto position : {"above", "inside", "below"}) {
         check(f.settings.set_text("name_position", position), "position the player name");

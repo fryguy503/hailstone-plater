@@ -328,7 +328,7 @@ std::optional<PreparedPlate> PresentationEngine::prepare(const HailstoneNameplat
         }
     }
     plate.show_name = settings.boolean("show_name");
-    if (player && plate.show_name) plate.guild = detail::clean_text(extra.guild_caption, 256);
+    if (plate.show_name) plate.secondary_caption = detail::clean_text(extra.secondary_caption, 256);
     plate.text_color = color("text_color");
     plate.name_color = con_name && extra.con_color ? *extra.con_color : plate.text_color;
     plate.level_color = plate.name_color;

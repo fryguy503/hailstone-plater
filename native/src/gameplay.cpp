@@ -323,6 +323,20 @@ ActorGameplay Gameplay::actor(const PluginHostApi* api, const HailstoneNameplate
     return result;
 }
 
+std::string legacy_npc_caption(const PluginHostApi* api, const HailstoneNameplateCandidate& actor) {
+    constexpr auto kind = HAILSTONE_NAMEPLATE_NPC | HAILSTONE_NAMEPLATE_CORPSE;
+    if ((actor.flags & kind) != HAILSTONE_NAMEPLATE_NPC || actor.owner_id || !actor.incarnation) return {};
+    HailstoneSpawn spawn{};
+    if (!read_spawn(api, actor.spawn_id, spawn) || spawn.incarnation != actor.incarnation ||
+        !spawn.is_npc || spawn.is_corpse || spawn.owner_id) return {};
+    const auto description = counted(spawn.last_name);
+    if (description.empty()) return {};
+    std::string caption = "(";
+    caption += description;
+    caption += ')';
+    return caption;
+}
+
 void Gameplay::remove(std::uint32_t id) {
     resources_.remove(id);
     for (auto& set : auras_)

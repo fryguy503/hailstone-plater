@@ -35,6 +35,8 @@ struct ActorGameplay {
     std::span<const AuraObservation> auras;
 };
 
+std::string legacy_npc_caption(const PluginHostApi*, const HailstoneNameplateCandidate&);
+
 class Gameplay {
 public:
     void refresh(const PluginHostApi* api, const Settings& settings, std::uint64_t now_ms, bool packets_allowed);

@@ -14,6 +14,8 @@ Changes save per character. On first use for a character, Crest imports recogniz
 
 Use Hailstone's `/shownames` (or `/show`) to change player captions immediately. Modes 2, 3, 4, and 6 show surnames. Modes 4 through 6 show titles and suffixes. Modes 3 and 4 show guild tags when the client provides the guild caption to add-ons. Hailstone 0.7.2-beta supplies the player name and titles, and guild tags require a newer client with guild caption support. `/show off` hides player plates. The Crest short-names setting applies to NPCs and corpses.
 
+Server-supplied NPC descriptions such as `(Shadow Knight Guildmaster)` appear below NPC names, including on Hailstone 0.7.2-beta. Pet owner lines follow Hailstone's Pet Owner Names option on clients that supply the secondary caption.
+
 Use `/crest help` to list commands. `/crest parens` shows parentheses only, `/crest parens-tags` shows parentheses and type tags, `/crest tags` shows tags, `/crest suffix` adds a name suffix, and `/crest concealment-off` hides the cue. Use `/crest on`, `off`, `toggle`, `save`, or `status` for common actions. `/crest stop` suspends the renderer until you run `/crest on` or reload the add-on.
 
 ## Build and package

@@ -227,7 +227,7 @@ void extended_candidate_stride() {
     actors[0].known.y = 400;
     actors[0].known.depth = 10;
     actors[0].known.native_scale = 1;
-    actors[0].future.fill(UINT64_MAX);
+    actors[0].future.back() = UINT64_MAX;
     actors[1].known = actors[0].known;
     actors[1].known.flags = HAILSTONE_NAMEPLATE_NPC;
     actors[1].known.spawn_id = 43;
@@ -244,7 +244,7 @@ void extended_candidate_stride() {
     hailstone_plugin_set_host(nullptr);
 }
 
-void player_caption_tracks_host() {
+void captions_track_host() {
     FakeHost fake;
     hailstone_plugin_set_host(&fake.api);
     InitializePlugin();
@@ -259,25 +259,53 @@ void player_caption_tracks_host() {
     actor.depth = 10;
     actor.native_scale = 1;
 
-    constexpr auto guild_offset = offsetof(HailstoneNameplateCandidate, cast_name) + sizeof(HailstoneNameplateString);
-    alignas(HailstoneNameplateCandidate) std::array<std::byte, guild_offset + sizeof(HailstoneNameplateString)> record{};
-    const auto render = [&](const std::string& caption, HailstoneNameplateString guild, std::uint32_t stride) {
+    constexpr auto caption_offset = offsetof(HailstoneNameplateCandidate, cast_name) + sizeof(HailstoneNameplateString);
+    alignas(HailstoneNameplateCandidate) std::array<std::byte, caption_offset + sizeof(HailstoneNameplateString)> record{};
+    constexpr auto legacy_stride = static_cast<std::uint32_t>(caption_offset);
+    constexpr auto extended_stride = static_cast<std::uint32_t>(record.size());
+    const auto render = [&](std::string_view caption, HailstoneNameplateString secondary, std::uint32_t stride) {
         actor.caption = {caption.data(), static_cast<std::uint32_t>(caption.size())};
-        std::memcpy(record.data(), &actor, guild_offset);
-        std::memcpy(record.data() + guild_offset, &guild, sizeof(guild));
+        std::memcpy(record.data(), &actor, caption_offset);
+        std::memcpy(record.data() + caption_offset, &secondary, sizeof(secondary));
         fake.render_frame(record.data(), 1, stride);
     };
     const HailstoneNameplateString guild{"<Ice Guard>", 11};
     const std::array captions{"Edric", "Edric Vale", "Edric Vale", "Sir Edric Vale III", "Sir Edric III", "Sir Edric Vale III"};
     for (std::size_t i = 0; i < captions.size(); ++i) {
         const bool shows_guild = i == 2 || i == 3;
-        render(captions[i], shows_guild ? guild : HailstoneNameplateString{}, static_cast<std::uint32_t>(record.size()));
+        render(captions[i], shows_guild ? guild : HailstoneNameplateString{}, extended_stride);
         auto expected = std::vector<std::string>{captions[i]};
         if (shows_guild) expected.emplace_back(guild.data, guild.bytes);
         fake.expect_labels(std::move(expected));
     }
-    render(captions[3], guild, static_cast<std::uint32_t>(guild_offset));
+    render(captions[3], guild, legacy_stride);
     fake.expect_labels({captions[3]});
+
+    fake.api.get_spawn = [](void*, std::uint32_t id, HailstoneSpawn* out) {
+        out->id = id;
+        out->incarnation = 17;
+        out->is_npc = 1;
+        constexpr char description[] = "Shadow Knight Guildmaster";
+        std::memcpy(out->last_name, description, sizeof(description));
+        return 1;
+    };
+    actor.flags = HAILSTONE_NAMEPLATE_NPC | HAILSTONE_NAMEPLATE_TARGET;
+    actor.spawn_name = {};
+    render("Kara", {}, legacy_stride);
+    fake.expect_labels({"Kara", "(Shadow Knight Guildmaster)"});
+    render("Kara", {"(Shadow Knight Spells)", 22}, extended_stride);
+    fake.expect_labels({"Kara", "(Shadow Knight Spells)"});
+    render("Kara", {}, extended_stride);
+    fake.expect_labels({"Kara"});
+    ++actor.incarnation;
+    render("Kara", {}, legacy_stride);
+    fake.expect_labels({"Kara"});
+    --actor.incarnation;
+    actor.owner_id = 24;
+    render("Kara", {}, legacy_stride);
+    fake.expect_labels({"Kara"});
+    render("Kara", {"(Edric's pet)", 13}, extended_stride);
+    fake.expect_labels({"Kara", "(Edric's pet)"});
 
     ShutdownPlugin();
     hailstone_plugin_set_host(nullptr);
@@ -429,7 +457,7 @@ int main() {
         require(hailstone_plugin_abi() == HAILSTONE_PLUGIN_ABI, "plugin reports its public SDK ABI");
         older_host_is_safe();
         extended_candidate_stride();
-        player_caption_tracks_host();
+        captions_track_host();
         replacement_commands_and_packets();
         controls_are_visible_and_share_state();
         std::cout << "Crest native plugin smoke test passed\n";
