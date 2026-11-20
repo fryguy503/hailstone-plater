@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <utility>
 
 namespace crest {
 namespace {
@@ -73,6 +74,22 @@ std::string clean_name(std::string_view raw)
     name.resize(last == std::string::npos ? 0 : last + 1);
     std::replace(name.begin(), name.end(), '_', ' ');
     return name;
+}
+
+void strip_stock_concealment(std::string& caption, const std::string& name)
+{
+    if (name.empty()) return;
+    constexpr std::array brackets{std::pair{"([", "])"}, std::pair{"(", ")"}, std::pair{"[", "]"}};
+    for (const auto& [open, close] : brackets) {
+        const auto marked = open + name + close;
+        const auto start = caption.find(marked);
+        if (start == caption.npos) continue;
+        const auto end = start + marked.size();
+        if ((start == 0 || caption[start - 1] == ' ') && (end == caption.size() || caption[end] == ' ')) {
+            caption.replace(start, marked.size(), name);
+            return;
+        }
+    }
 }
 
 std::string lowercase(std::string name)
@@ -257,6 +274,7 @@ std::optional<PreparedPlate> PresentationEngine::prepare(const HailstoneNameplat
     const auto target = has(actor, HAILSTONE_NAMEPLATE_TARGET);
     const auto self = has(actor, HAILSTONE_NAMEPLATE_SELF);
     const auto corpse = has(actor, HAILSTONE_NAMEPLATE_CORPSE);
+    const auto player = !corpse && !has(actor, HAILSTONE_NAMEPLATE_NPC);
     const auto distance = std::isfinite(actor.distance) ? actor.distance : 0.0;
     const auto max_distance = settings.number("max_distance");
     if (!settings.boolean(kind.visibility_key) || distance > max_distance ||
@@ -297,9 +315,10 @@ std::optional<PreparedPlate> PresentationEngine::prepare(const HailstoneNameplat
     }
 
     detail::PlateStyle plate;
-    const auto caption = detail::clean_text(borrowed(actor.caption), 256);
-    plate.name = caption;
-    if (name.size() && (settings.boolean("short_names") || caption.empty())) plate.name = name;
+    if (player || name.empty() || !settings.boolean("short_names"))
+        plate.name = detail::clean_text(borrowed(actor.caption), 256);
+    if (plate.name.empty()) plate.name = name;
+    if (player && has(actor, HAILSTONE_NAMEPLATE_CONCEALED)) strip_stock_concealment(plate.name, name);
     if (plate.name.size() > settings.number("max_name")) {
         const auto offsets = detail::utf8_offsets(plate.name);
         const auto maximum = static_cast<std::size_t>(settings.number("max_name"));
@@ -309,6 +328,7 @@ std::optional<PreparedPlate> PresentationEngine::prepare(const HailstoneNameplat
         }
     }
     plate.show_name = settings.boolean("show_name");
+    if (player && plate.show_name) plate.guild = detail::clean_text(extra.guild_caption, 256);
     plate.text_color = color("text_color");
     plate.name_color = con_name && extra.con_color ? *extra.con_color : plate.text_color;
     plate.level_color = plate.name_color;

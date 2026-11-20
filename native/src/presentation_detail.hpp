@@ -20,7 +20,7 @@ struct Badge {
 };
 
 struct PlateStyle {
-    std::string name, level, subtitle, name_suffix;
+    std::string name, guild, level, subtitle, name_suffix;
     std::string_view name_prefix;
     std::uint32_t name_color = 0xffffff, level_color = 0xffffff, text_color = 0xffffff;
     std::uint32_t border = 0, background = 0;

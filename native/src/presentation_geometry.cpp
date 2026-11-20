@@ -561,18 +561,21 @@ std::optional<PreparedPlate> Geometry::build()
     };
     if (style_.badge_position == "above") y = rows(y);
     const auto body_top = y;
-    auto name_y = y;
-    if (show_name && style_.name_position != "below" && !inside_) {
-        const auto [height, top] = text_height(name_, fs_);
-        name_y = y - top;
+    const auto text_row = [&](std::string_view text, float font) {
+        const auto [height, top] = text_height(text, font);
+        const auto at = y - top;
         y += height + unit_ + row_gap_;
+        return at;
+    };
+    auto name_y = y;
+    auto guild_y = y;
+    const auto show_guild = show_name && !style_.guild.empty();
+    if (show_name && style_.name_position != "below" && !inside_) {
+        name_y = text_row(name_, fs_);
+        if (show_guild) guild_y = text_row(style_.guild, tag_font_);
     }
     auto subtitle_y = y;
-    if (!subtitle.empty()) {
-        const auto [height, top] = text_height(subtitle, tag_font_);
-        subtitle_y = y - top;
-        y += height + unit_ + row_gap_;
-    }
+    if (!subtitle.empty()) subtitle_y = text_row(subtitle, tag_font_);
     const auto bar_height = [&](const std::optional<Bar>& value, float height) {
         if (!value) return 0.0f;
         auto h = std::clamp(height, 1.0f, 80.0f) * unit_;
@@ -584,6 +587,10 @@ std::optional<PreparedPlate> Geometry::build()
     if (inside_) hh = std::max(hh, text_height(name_, fs_).first + gap_ + unit_);
     auto hy = y;
     y += hh;
+    if (inside_ && show_guild) {
+        y += row_gap_;
+        guild_y = text_row(style_.guild, tag_font_);
+    }
     auto level_y = y;
     if (level_below) {
         const auto [height, top] = text_height(level, tag_font_);
@@ -598,15 +605,15 @@ std::optional<PreparedPlate> Geometry::build()
     y += ch;
     if (show_name && style_.name_position == "below") {
         if (style_.health || style_.resource || style_.cast) y += row_gap_;
-        const auto [height, top] = text_height(name_, fs_);
-        name_y = y - top;
-        y += height + unit_;
+        name_y = text_row(name_, fs_);
+        if (show_guild) guild_y = text_row(style_.guild, tag_font_);
+        y -= row_gap_;
     }
     if (side && !badge_layout.empty()) {
         const auto column_height = badge_layout.size() * (badge_size + badge_gap) - badge_gap;
         const auto body_height = y - body_top;
         const auto shift = std::max(0.0f, (column_height - body_height) / 2);
-        name_y += shift; subtitle_y += shift; level_y += shift; hy += shift; my += shift; cy += shift;
+        name_y += shift; guild_y += shift; subtitle_y += shift; level_y += shift; hy += shift; my += shift; cy += shift;
         const auto top = body_top + std::max(0.0f, (body_height - column_height) / 2);
         auto decoration = style_.frame_style == "runic" ? 17 * unit_ : ornament_ + 2 * unit_;
         if (target_ && style_.target_style == "glow") decoration = std::max(decoration, 9 * unit_);
@@ -646,6 +653,7 @@ std::optional<PreparedPlate> Geometry::build()
     draw_bar(style_.resource, my, mh, width_, style_.health_text_align, !style_.health, false);
     draw_bar(style_.cast, cy, ch, cast_width_, style_.cast_text_align, !style_.health && !style_.resource, false);
     if (show_name && !inside_) label(name_, -width_ / 2, name_y, fs_, width_, style_.text_align, style_.name_color, true);
+    if (show_guild) label(style_.guild, -width_ / 2, guild_y, tag_font_, width_, style_.text_align, style_.text_color, true);
     label(subtitle, -width_ / 2, subtitle_y, tag_font_, width_, style_.text_align, style_.text_color, true,
           level_prefix, style_.level_color);
     if (level_below) label(level, -width_ / 2, level_y, tag_font_, width_, style_.text_align, style_.level_color, true);

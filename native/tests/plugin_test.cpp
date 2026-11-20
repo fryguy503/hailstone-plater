@@ -244,6 +244,45 @@ void extended_candidate_stride() {
     hailstone_plugin_set_host(nullptr);
 }
 
+void player_caption_tracks_host() {
+    FakeHost fake;
+    hailstone_plugin_set_host(&fake.api);
+    InitializePlugin();
+
+    HailstoneNameplateCandidate actor{};
+    actor.flags = HAILSTONE_NAMEPLATE_GROUP | HAILSTONE_NAMEPLATE_TARGET;
+    actor.spawn_id = 42;
+    actor.incarnation = 17;
+    actor.spawn_name = {"Edric", 5};
+    actor.x = 200;
+    actor.y = 400;
+    actor.depth = 10;
+    actor.native_scale = 1;
+
+    constexpr auto guild_offset = offsetof(HailstoneNameplateCandidate, cast_name) + sizeof(HailstoneNameplateString);
+    alignas(HailstoneNameplateCandidate) std::array<std::byte, guild_offset + sizeof(HailstoneNameplateString)> record{};
+    const auto render = [&](const std::string& caption, HailstoneNameplateString guild, std::uint32_t stride) {
+        actor.caption = {caption.data(), static_cast<std::uint32_t>(caption.size())};
+        std::memcpy(record.data(), &actor, guild_offset);
+        std::memcpy(record.data() + guild_offset, &guild, sizeof(guild));
+        fake.render_frame(record.data(), 1, stride);
+    };
+    const HailstoneNameplateString guild{"<Ice Guard>", 11};
+    const std::array captions{"Edric", "Edric Vale", "Edric Vale", "Sir Edric Vale III", "Sir Edric III", "Sir Edric Vale III"};
+    for (std::size_t i = 0; i < captions.size(); ++i) {
+        const bool shows_guild = i == 2 || i == 3;
+        render(captions[i], shows_guild ? guild : HailstoneNameplateString{}, static_cast<std::uint32_t>(record.size()));
+        auto expected = std::vector<std::string>{captions[i]};
+        if (shows_guild) expected.emplace_back(guild.data, guild.bytes);
+        fake.expect_labels(std::move(expected));
+    }
+    render(captions[3], guild, static_cast<std::uint32_t>(guild_offset));
+    fake.expect_labels({captions[3]});
+
+    ShutdownPlugin();
+    hailstone_plugin_set_host(nullptr);
+}
+
 void replacement_commands_and_packets() {
     FakeHost fake;
     hailstone_plugin_set_host(&fake.api);
@@ -390,6 +429,7 @@ int main() {
         require(hailstone_plugin_abi() == HAILSTONE_PLUGIN_ABI, "plugin reports its public SDK ABI");
         older_host_is_safe();
         extended_candidate_stride();
+        player_caption_tracks_host();
         replacement_commands_and_packets();
         controls_are_visible_and_share_state();
         std::cout << "Crest native plugin smoke test passed\n";

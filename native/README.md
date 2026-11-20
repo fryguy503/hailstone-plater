@@ -12,6 +12,8 @@ Type `/crest` in game to open the full configuration window in Modern or Gamepad
 
 Changes save per character. On first use for a character, Crest imports recognized saved settings and named profiles from the matching Lua Crest file if one exists. The existing `CREST1` text format works for profile import and export.
 
+Use Hailstone's `/shownames` (or `/show`) to change player captions immediately. Modes 2, 3, 4, and 6 show surnames. Modes 4 through 6 show titles and suffixes. Modes 3 and 4 show guild tags when the client provides the guild caption to add-ons. Hailstone 0.7.2-beta supplies the player name and titles, and guild tags require a newer client with guild caption support. `/show off` hides player plates. The Crest short-names setting applies to NPCs and corpses.
+
 Use `/crest help` to list commands. `/crest parens` shows parentheses only, `/crest parens-tags` shows parentheses and type tags, `/crest tags` shows tags, `/crest suffix` adds a name suffix, and `/crest concealment-off` hides the cue. Use `/crest on`, `off`, `toggle`, `save`, or `status` for common actions. `/crest stop` suspends the renderer until you run `/crest on` or reload the add-on.
 
 ## Build and package
@@ -38,5 +40,5 @@ python native/tools/package.py --client-source <path-to-hailstone-source> \
   --platform windows-x64=path/to/crest.dll \
   --platform linux-x64=path/to/crest.so \
   --platform macos-arm64=path/to/crest.dylib \
-  --out native/release/0.3.0-preview.7
+  --out native/release/0.3.0-preview.8
 ```

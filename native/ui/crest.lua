@@ -90,6 +90,7 @@ local function status_lines()
 end
 
 local panel = Panel.new(panel_ui, {
+    labels = {short_names = "Use short names for NPCs and corpses"},
     settings = function() return settings end,
     profiles = function() return profiles end,
     api_version = function() return state.available and 1 or 0 end,

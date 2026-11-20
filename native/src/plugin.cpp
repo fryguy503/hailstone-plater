@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstring>
 #include <filesystem>
 #include <span>
 #include <string_view>
@@ -24,6 +25,9 @@ using namespace std::chrono_literals;
 constexpr auto canvas_caps = HAILSTONE_CAP_READ | HAILSTONE_CAP_UI | HAILSTONE_CAP_EXTEND;
 constexpr std::size_t max_observed_actors = 1024;
 constexpr std::size_t max_frame_commands = 32768, max_frame_vertices = 262144;
+// Hailstone appends guild_caption after cast_name in ABI 3. Read it by stride
+// so builds against the 0.7.2 SDK accept both old and extended candidates.
+constexpr auto guild_caption_offset = offsetof(HailstoneNameplateCandidate, cast_name) + sizeof(HailstoneNameplateString);
 
 crest::SettingsStore store;
 crest::Gameplay gameplay;
@@ -188,6 +192,7 @@ void canvas(void*, const HailstoneNameplateFrame* frame) {
     const auto& player = gameplay.player();
     const bool need_consider = settings.boolean("con_name_color") || settings.text("color_mode") == "consider";
     const bool exact_concealment = packets_allowed && settings.text("concealment_display") != "Off";
+    const bool has_guild_caption = frame->candidate_size >= guild_caption_offset + sizeof(HailstoneNameplateString);
     const crest::CanvasMetrics metrics{
         [](std::string_view text, float size, std::int32_t font) -> std::optional<HailstoneNameplateTextMetrics> {
             HailstoneNameplateTextMetrics result{};
@@ -229,6 +234,13 @@ void canvas(void*, const HailstoneNameplateFrame* frame) {
         observation.remote_mana = source.resources.mana_percent;
         observation.remote_endurance = source.resources.endurance_percent;
         observation.con_color = source.consider_color;
+        if (has_guild_caption && !(actor.flags & (HAILSTONE_NAMEPLATE_NPC | HAILSTONE_NAMEPLATE_CORPSE))) {
+            const auto* record = static_cast<const std::byte*>(frame->candidates) +
+                                 static_cast<std::size_t>(index) * frame->candidate_size;
+            HailstoneNameplateString guild{};
+            std::memcpy(&guild, record + guild_caption_offset, sizeof(guild));
+            if (guild.data) observation.guild_caption = {guild.data, guild.bytes};
+        }
         const auto concealment_npc = (actor.flags & (HAILSTONE_NAMEPLATE_NPC | HAILSTONE_NAMEPLATE_CORPSE)) ==
                                       HAILSTONE_NAMEPLATE_NPC;
         if (exact_concealment && actor.incarnation && concealment_npc)

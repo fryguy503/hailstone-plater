@@ -1,5 +1,9 @@
 # Changes
 
+## 0.3.0-preview.8
+
+- Player plates follow Hailstone's `/show` modes for surnames, titles, and suffixes. Guild tags appear when the client supplies its guild caption to Crest.
+
 ## 0.3.0-preview.7
 
 - Added native Linux x64 and Apple Silicon macOS packages alongside Windows x64.

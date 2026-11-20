@@ -19,14 +19,18 @@ end
 local color=Colors.draw
 function M.new(ui,app)
   local self={open=false,preview=true,profile_name='',profile_text='',message='',rule_name='',rule_kind='any',rule_exact=false,search='',unit='npc'}
+  local function setting_label(d)
+    return app.labels and app.labels[d[2]] or d[3]
+  end
   local function setting(s,d)
     local value,changed=s[d[2]],false
+    local label=setting_label(d)
     ui.SetNextItemWidth(260)
-    if d[4]=='bool' then value,changed=ui.Checkbox(d[3],value)
-    elseif d[4]=='number' then value,changed=ui.SliderFloat(d[3],value,d[6],d[7])
-    elseif d[4]=='enum' then value,changed=combo(ui,d[3],value,d[6])
-    elseif d[4]=='color' then value,changed=color(ui,d[3],value)
-    else value,changed=ui.InputText(d[3],value,d[6]+1) end
+    if d[4]=='bool' then value,changed=ui.Checkbox(label,value)
+    elseif d[4]=='number' then value,changed=ui.SliderFloat(label,value,d[6],d[7])
+    elseif d[4]=='enum' then value,changed=combo(ui,label,value,d[6])
+    elseif d[4]=='color' then value,changed=color(ui,label,value)
+    else value,changed=ui.InputText(label,value,d[6]+1) end
     if changed then s[d[2]]=C.value(d[2],value); app.changed() end
   end
   function self:draw()
@@ -61,7 +65,7 @@ function M.new(ui,app)
               if section[1]=='auras' then ui.TextWrapped('Aura badges use known self or current-target buffs only. Servers may restrict target buff inspection. Whitelist matches literal names or name fragments.') end
               if section[1]=='colors' then ui.TextDisabled('Click a color swatch for the hue wheel, RGB values, hexadecimal input and quick colors.') end
               for _,d in ipairs(C.schema) do
-                if d[1]==section[1] and (not searching or (section[2]..' '..d[3]..' '..d[2]):lower():find(self.search:lower(),1,true)) then setting(s,d) end
+                if d[1]==section[1] and (not searching or (section[2]..' '..setting_label(d)..' '..d[2]):lower():find(self.search:lower(),1,true)) then setting(s,d) end
               end
             end
           end

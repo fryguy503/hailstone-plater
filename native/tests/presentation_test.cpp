@@ -192,6 +192,32 @@ void textures_and_badges()
           "unknown concealment keeps the generic badge");
 }
 
+void player_guild_layout_and_concealment()
+{
+    Fixture f;
+    f.actor.flags &= ~HAILSTONE_NAMEPLATE_NPC;
+    f.actor.flags |= HAILSTONE_NAMEPLATE_CONCEALED | HAILSTONE_NAMEPLATE_INVISIBLE |
+                     HAILSTONE_NAMEPLATE_INVISIBLE_UNDEAD;
+    f.actor.spawn_name = borrowed("Edric");
+    f.actor.caption = borrowed("Sir ([Edric]) Vale III");
+    f.observation.guild_caption = "<Ice Guard>";
+    check(f.settings.set_text("width", "300"), "allow room for name and health text");
+    for (const auto position : {"above", "inside", "below"}) {
+        check(f.settings.set_text("name_position", position), "position the player name");
+        const auto plate = f.draw();
+        const auto name = label(plate, "(Sir Edric Vale III)", 0xf2f5fa);
+        const auto guild = label(plate, "<Ice Guard>", 0xf2f5fa);
+        check(name && guild && guild->y > name->y && guild->y < plate.bounds.y + plate.bounds.height,
+              "guild caption sits under the player name without duplicating stock concealment");
+    }
+    check(f.settings.set_text("concealment_display", "Off"), "hide concealment markers");
+    const auto plain = f.draw();
+    check(label(plain, "Sir Edric Vale III", 0xf2f5fa), "titles remain visible when concealment markers are off");
+    check(f.settings.set("show_name", false), "hide names");
+    const auto hidden = f.draw();
+    check(!label(hidden, "<Ice Guard>", 0xf2f5fa), "hiding names also hides the guild tag");
+}
+
 } // namespace
 
 int main()
@@ -199,4 +225,5 @@ int main()
     wide_target_clearance();
     name_level_and_visibility();
     textures_and_badges();
+    player_guild_layout_and_concealment();
 }
