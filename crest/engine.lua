@@ -80,6 +80,11 @@ function M:presentation(spawn,ctx,s,extra)
   if not visible[kind] or distance>s.max_distance or (s.target_only and not targeted) or
     (s.combat_only and not extra.combat) or (s.injured_only and not targeted and hp and hp>=100) then return {hide=true} end
   local name=clean(spawn.name or '')
+  local display_name=s.short_names and name or C.text(ctx.name or name,256)
+  if spawn.npc and not spawn.corpse and not display_name:find('%S') then
+    display_name=s.short_names and C.text(ctx.name,256) or name
+    if not display_name:find('%S') then return {hide=true} end
+  end
   local rule
   for _,r in ipairs(s.rules) do if matches(r,spawn,kind,name:lower()) then rule=r; break end end
   if rule and rule.hide then return {hide=true} end
@@ -102,7 +107,7 @@ function M:presentation(spawn,ctx,s,extra)
   local now=extra.now_ms or ctx.now_ms or 0
   local alpha=s.alpha*(extra.has_target and not targeted and s.non_target_alpha or 1)
   if s.distance_fade and not targeted then alpha=alpha*(1-0.65*math.max(0,(distance/s.max_distance-0.65)/0.35)) end
-  local p={name=C.text(trim_name(s.short_names and name or C.text(ctx.name or name,256),math.floor(s.max_name)),256),
+  local p={name=C.text(trim_name(display_name,math.floor(s.max_name)),256),
     name_color=con_text and con or s.text_color,level_color=con_text and con or s.text_color,
     level=s.show_level and ('Lv '..tostring(spawn.level or '?')) or '',level_position=s.level_position,
     show_name=s.show_name,show_marker=targeted and s.target_marker,

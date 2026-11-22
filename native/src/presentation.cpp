@@ -274,7 +274,8 @@ std::optional<PreparedPlate> PresentationEngine::prepare(const HailstoneNameplat
     const auto target = has(actor, HAILSTONE_NAMEPLATE_TARGET);
     const auto self = has(actor, HAILSTONE_NAMEPLATE_SELF);
     const auto corpse = has(actor, HAILSTONE_NAMEPLATE_CORPSE);
-    const auto player = !corpse && !has(actor, HAILSTONE_NAMEPLATE_NPC);
+    const auto npc = !corpse && has(actor, HAILSTONE_NAMEPLATE_NPC);
+    const auto player = !corpse && !npc;
     const auto distance = std::isfinite(actor.distance) ? actor.distance : 0.0;
     const auto max_distance = settings.number("max_distance");
     if (!settings.boolean(kind.visibility_key) || distance > max_distance ||
@@ -284,6 +285,15 @@ std::optional<PreparedPlate> PresentationEngine::prepare(const HailstoneNameplat
     const auto name = clean_name(borrowed(actor.spawn_name));
     const auto* rule = match_rule(settings, kind.name, name);
     if (rule && rule->hide) return detail::hidden_plate();
+
+    detail::PlateStyle plate;
+    const bool blank_npc_name = npc && name.find_first_not_of(' ') == std::string::npos;
+    if (player || name.empty() || blank_npc_name || !settings.boolean("short_names"))
+        plate.name = detail::clean_text(borrowed(actor.caption), 256);
+    if (plate.name.empty() || (npc && plate.name.find_first_not_of(' ') == std::string::npos)) {
+        if (blank_npc_name) return detail::hidden_plate();
+        plate.name = name;
+    }
 
     const auto unit_prefix = std::string(kind.name) + "_";
     const auto custom_unit = settings.boolean(unit_prefix + "override");
@@ -314,10 +324,6 @@ std::optional<PreparedPlate> PresentationEngine::prepare(const HailstoneNameplat
         if (override_color >= 0) fill = static_cast<std::uint32_t>(override_color);
     }
 
-    detail::PlateStyle plate;
-    if (player || name.empty() || !settings.boolean("short_names"))
-        plate.name = detail::clean_text(borrowed(actor.caption), 256);
-    if (plate.name.empty()) plate.name = name;
     if (player && has(actor, HAILSTONE_NAMEPLATE_CONCEALED)) strip_stock_concealment(plate.name, name);
     if (plate.name.size() > settings.number("max_name")) {
         const auto offsets = detail::utf8_offsets(plate.name);

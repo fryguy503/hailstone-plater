@@ -1,5 +1,9 @@
 # Changes
 
+## 0.3.0-preview.9
+
+- Hide blank NPC nameplates, including the decorative bodies in the Plane of Tactics arena. Named NPCs and real corpses still follow your Crest settings.
+
 ## 0.3.0-preview.8
 
 - Player plates follow Hailstone's `/show` modes for surnames, titles, and suffixes. Guild tags appear when the client supplies its guild caption to Crest.

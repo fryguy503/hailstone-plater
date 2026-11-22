@@ -46,6 +46,28 @@ test('distance, target, combat and full-health visibility rules',function()
   check(not presentation(function(_,ctx,s) s.injured_only=true; ctx.hp_percent=100; ctx.target=true end).hide)
 end)
 
+test('living NPCs need a visible name or host caption',function()
+  for _,short_names in ipairs({true,false}) do
+    for _,blank in ipairs({'', '#000', '#___000', ' \t'}) do
+      local p=presentation(function(spawn,ctx,s)
+        spawn.name=blank; spawn.level=1; ctx.name=' \t'; ctx.hp_percent=100
+        s.short_names=short_names
+      end)
+      check(p.hide)
+    end
+    local named=presentation(function(_,ctx,s) ctx.name=' '; s.short_names=short_names end)
+    equal(named.name,'Guardian'); check(named.health)
+    local alias=presentation(function(spawn,ctx,s)
+      spawn.name='#___000'; ctx.name='Arena Guardian'; s.short_names=short_names
+    end)
+    equal(alias.name,'Arena Guardian'); check(alias.health)
+  end
+  local corpse=presentation(function(spawn,ctx,s)
+    spawn.name=''; spawn.corpse=true; ctx.name=''; s.show_corpses=true
+  end)
+  check(not corpse.hide); equal(corpse.health,nil)
+end)
+
 test('unknown HP and resources are absent, valid zero percentages remain visible',function()
   local p=presentation(function(_,ctx) ctx.hp_percent=nil end)
   equal(p.health,nil); equal(p.mana,nil)

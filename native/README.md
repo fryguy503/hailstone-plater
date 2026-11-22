@@ -42,5 +42,5 @@ python native/tools/package.py --client-source <path-to-hailstone-source> \
   --platform windows-x64=path/to/crest.dll \
   --platform linux-x64=path/to/crest.so \
   --platform macos-arm64=path/to/crest.dylib \
-  --out native/release/0.3.0-preview.8
+  --out native/release/0.3.0-preview.9
 ```

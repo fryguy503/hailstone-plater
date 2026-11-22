@@ -157,6 +157,40 @@ void name_level_and_visibility()
     check(!f.renderer.prepare(f.frame, f.actor, f.settings, f.observation, f.metrics), "disable leaves claims to the host");
 }
 
+void blank_npc_names()
+{
+    Fixture f;
+    f.actor.flags = HAILSTONE_NAMEPLATE_NPC | HAILSTONE_NAMEPLATE_HP_KNOWN;
+    f.actor.level = 1;
+    f.actor.hp_percent = 100;
+    for (const bool short_names : {true, false}) {
+        check(f.settings.set("short_names", short_names), "switch NPC name format");
+        f.actor.spawn_name = borrowed("#_001");
+        f.actor.caption = borrowed(" ");
+        const auto plate = f.renderer.prepare(f.frame, f.actor, f.settings, f.observation, f.metrics);
+        check(plate && plate->commands.empty() && plate->view(f.frame.frame, 0).flags == HAILSTONE_NAMEPLATE_HIDE,
+              "underscore-only arena NPC has no drawing or click target");
+    }
+
+    check(f.settings.set("short_names", true), "restore short names");
+    f.actor.caption = borrowed("Arena attendant");
+    const auto aliased = f.draw();
+    check(label(aliased, "Arena attendant", 0xf2f5fa), "use a visible stock caption when the short name is blank");
+
+    f.actor.spawn_name = borrowed("#Arena_challenger001");
+    f.actor.caption = borrowed("Arena challenger");
+    check(f.settings.set("show_name", false), "disable rendering names");
+    const auto named = f.draw();
+    check(label(named, "100%", 0xf2f5fa), "named NPC still has a health bar when names are disabled");
+
+    check(f.settings.set("show_name", true) && f.settings.set("show_corpses", true), "show corpse names");
+    f.actor.flags |= HAILSTONE_NAMEPLATE_CORPSE;
+    f.actor.spawn_name = borrowed("Arena_challenger's_corpse001");
+    f.actor.caption = borrowed("Arena challenger's corpse");
+    const auto corpse = f.draw();
+    check(label(corpse, "Arena challenger's corpse", 0xf2f5fa), "real NPC corpses retain their names");
+}
+
 void textures_and_badges()
 {
     Fixture f;
@@ -224,6 +258,7 @@ int main()
 {
     wide_target_clearance();
     name_level_and_visibility();
+    blank_npc_names();
     textures_and_badges();
     player_guild_layout_and_concealment();
 }
