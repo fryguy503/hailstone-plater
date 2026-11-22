@@ -185,10 +185,10 @@ void blank_npc_names()
 
     check(f.settings.set("show_name", true) && f.settings.set("show_corpses", true), "show corpse names");
     f.actor.flags |= HAILSTONE_NAMEPLATE_CORPSE;
-    f.actor.spawn_name = borrowed("Arena_challenger's_corpse001");
-    f.actor.caption = borrowed("Arena challenger's corpse");
+    f.actor.spawn_name = borrowed("a_rat's_corpse001");
+    f.actor.caption = borrowed("a rat's corpse");
     const auto corpse = f.draw();
-    check(label(corpse, "Arena challenger's corpse", 0xf2f5fa), "real NPC corpses retain their names");
+    check(label(corpse, "a rat's corpse", 0xf2f5fa), "real NPC corpses retain their names");
 }
 
 void textures_and_badges()
