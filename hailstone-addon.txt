@@ -1,11 +1,11 @@
 hailstone-addon 1
 name crest
 kind plugin
-version 0.3.0-preview.9
+version 0.3.0-preview.10
 min_client 0.7.1-beta
 author Fryguy
 description Configurable native world nameplates for Hailstone with themes, profiles and optional server indicators.
 caps read,commands,ui,extend,packets
-package linux-x64 206027 1cf15ba32d3ed3a0ed40c55ea1d27c1c5db4e27e49c89dedaa2ed795d4c7ab55 crest-0.3.0-preview.9-linux-x64.zip
-package macos-arm64 145876 68ca2b0ac39ba436528d66349fa7bc47a37ab0a61733dfeb3eaaceae51ef1bcd crest-0.3.0-preview.9-macos-arm64.zip
-package windows-x64 360968 693a9d1c4f2b9935be54b9e34098bc0b30b1a3ed9bfc567d2b6ca13b05d2cdc4 crest-0.3.0-preview.9-windows-x64.zip
+package linux-x64 207839 38fa31781c58b1446fb37d40c4de9da8ee2e49aa958a4a0f8eecafa4d26c9ca6 crest-0.3.0-preview.10-linux-x64.zip
+package macos-arm64 147491 e805fb4c0d257fb341d6a5b69e51df238d91753e8ea0710959456b60b9a2e83f crest-0.3.0-preview.10-macos-arm64.zip
+package windows-x64 361838 2d55c0df11f9c44c096bb6cba2e15a651d47138509fb045f9497bf1884d007d3 crest-0.3.0-preview.10-windows-x64.zip
