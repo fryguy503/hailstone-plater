@@ -21,6 +21,8 @@ extern "C" void InitializePlugin();
 extern "C" void ShutdownPlugin();
 extern "C" void OnPulse();
 extern "C" void OnBeginZone();
+extern "C" void SetGameState(int state);
+extern "C" void OnRemoveSpawn(std::uint32_t id);
 extern "C" int OnPacket(int stream, int direction, HailstonePacket* packet);
 
 struct HailstoneArgs { std::vector<HailstoneValue> values; };
@@ -60,6 +62,7 @@ struct FakeHost {
     std::vector<std::string> chat;
     std::map<std::string, HailstoneUiFn> ui_functions;
     std::vector<Submission> submitted;
+    HailstoneSpawn spawn{};
 
     FakeHost() {
         api.abi = HAILSTONE_PLUGIN_ABI;
@@ -394,6 +397,100 @@ void replacement_commands_and_packets() {
     hailstone_plugin_set_host(nullptr);
 }
 
+void level_updates_follow_the_living_spawn() {
+    FakeHost fake;
+    fake.spawn.id = 0x012a;
+    fake.spawn.incarnation = 17;
+    fake.spawn.level = 10;
+    fake.api.get_spawn = [](void* data, std::uint32_t id, HailstoneSpawn* out) {
+        const auto& spawn = static_cast<FakeHost*>(data)->spawn;
+        if (spawn.id != id) return 0;
+        *out = spawn;
+        return 1;
+    };
+    hailstone_plugin_set_host(&fake.api);
+    InitializePlugin();
+
+    HailstoneNameplateCandidate actor{};
+    actor.flags = HAILSTONE_NAMEPLATE_TARGET | HAILSTONE_NAMEPLATE_HP_KNOWN;
+    actor.spawn_id = fake.spawn.id;
+    actor.incarnation = fake.spawn.incarnation;
+    actor.level = fake.spawn.level;
+    actor.caption = {"Edric", 5};
+    actor.x = 400;
+    actor.y = 400;
+    actor.depth = 10;
+    actor.native_scale = 1;
+    actor.distance = 10;
+    actor.hp_percent = 80;
+    const auto expect_level = [&](std::uint32_t level) {
+        fake.render(actor);
+        fake.expect_labels({"Edric", "80%", "Lv " + std::to_string(level)});
+    };
+    expect_level(10);
+
+    std::array<std::uint8_t, 8> bytes{0x2a, 0x01, 1, 0, 14, 0, 0, 0};
+    HailstonePacket packet{0x0971, bytes.data(), bytes.size()};
+    const auto receive = [&] {
+        const auto original = bytes;
+        const auto size = packet.size;
+        require(OnPacket(HAILSTONE_STREAM_ZONE, HAILSTONE_IN, &packet) == 0 && bytes == original &&
+                packet.opcode == 0x0971 && packet.data == bytes.data() && packet.size == size,
+                "level packets are only observed");
+    };
+    OnPacket(HAILSTONE_STREAM_ZONE, HAILSTONE_OUT, &packet);
+    expect_level(10);
+    receive();
+    expect_level(14);
+    bytes[4] = 12;
+    receive();
+    expect_level(12);
+
+    bytes[4] = 0;
+    bytes[5] = 1;
+    receive();
+    bytes[5] = 0;
+    receive();
+    bytes[4] = 15;
+    bytes[2] = 2;
+    receive();
+    bytes[2] = 1;
+    packet.size = bytes.size() - 1;
+    receive();
+    packet.size = bytes.size();
+    expect_level(12);
+
+    fake.spawn.level = actor.level = 12;
+    expect_level(12);
+    fake.spawn.level = actor.level = 13;
+    expect_level(13);
+
+    receive();
+    expect_level(15);
+    actor.incarnation = ++fake.spawn.incarnation;
+    expect_level(13);
+    receive();
+    expect_level(15);
+    OnRemoveSpawn(actor.spawn_id);
+    expect_level(13);
+    OnBeginZone();
+    receive(); // May arrive before the actor has been drawn in the new zone.
+    expect_level(15);
+    OnBeginZone();
+    expect_level(13);
+    receive();
+    SetGameState(GAMESTATE_CHARSELECT);
+    expect_level(13);
+
+    receive();
+    fake.caps &= ~HAILSTONE_CAP_PACKETS;
+    OnPulse();
+    receive();
+    expect_level(13);
+    ShutdownPlugin();
+    hailstone_plugin_set_host(nullptr);
+}
+
 void controls_are_visible_and_share_state() {
     FakeHost fake;
     hailstone_plugin_set_host(&fake.api);
@@ -459,6 +556,7 @@ int main() {
         extended_candidate_stride();
         captions_track_host();
         replacement_commands_and_packets();
+        level_updates_follow_the_living_spawn();
         controls_are_visible_and_share_state();
         std::cout << "Crest native plugin smoke test passed\n";
         return 0;

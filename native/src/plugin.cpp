@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <unordered_map>
@@ -25,6 +26,8 @@ using namespace std::chrono_literals;
 constexpr auto canvas_caps = HAILSTONE_CAP_READ | HAILSTONE_CAP_UI | HAILSTONE_CAP_EXTEND;
 constexpr std::size_t max_observed_actors = 1024;
 constexpr std::size_t max_frame_commands = 32768, max_frame_vertices = 262144;
+constexpr std::uint16_t spawn_appearance_opcode = 0x0971;
+constexpr std::uint16_t who_level_appearance = 1;
 // Hailstone appends secondary_caption after cast_name in ABI 3. Read it by stride
 // so builds against the 0.7.2 SDK accept both old and extended candidates.
 constexpr auto secondary_caption_offset = offsetof(HailstoneNameplateCandidate, cast_name) + sizeof(HailstoneNameplateString);
@@ -34,6 +37,12 @@ crest::Gameplay gameplay;
 crest::PresentationEngine presentation;
 crest::ServerIndicators indicators;
 std::unordered_map<std::uint32_t, std::uint64_t> incarnations;
+struct LevelUpdate {
+    std::uint64_t incarnation;
+    std::uint32_t previous_host_level;
+    std::uint32_t level;
+};
+std::unordered_map<std::uint32_t, LevelUpdate> level_updates;
 
 bool registered = false, packets_allowed = false, ui_registered = false;
 bool settings_open = false, storage_ready = true, server_data = false, stopped = false;
@@ -64,6 +73,7 @@ void reset_indicators() {
 
 void reset_world() {
     reset_indicators();
+    level_updates.clear();
     gameplay.reset();
     indicator_scope = gameplay.scope_revision();
     next_gameplay_poll = {};
@@ -79,8 +89,34 @@ void sync_indicator_scope() {
 void forget_actor(std::uint32_t id) {
     indicators.remove(id);
     incarnations.erase(id);
+    level_updates.erase(id);
     gameplay.remove(id);
     presentation.remove(id);
+}
+
+void observe_level(crest::wire::Bytes bytes) {
+    // EQEmu broadcasts WhoLevel as u16 spawn ID, u16 appearance type, u32 level.
+    if (bytes.size() != 8 || crest::wire::le16(bytes, 2) != who_level_appearance) return;
+    const auto id = crest::wire::le16(bytes, 0);
+    const auto level = crest::wire::le32(bytes, 4);
+    if (!id || !level || level > 255 || !HAILSTONE_HOST_HAS(host, get_spawn)) return;
+    HailstoneSpawn spawn{};
+    spawn.size = sizeof(spawn);
+    if (!host->get_spawn(host->host, id, &spawn) || spawn.id != id || !spawn.incarnation || spawn.is_corpse) return;
+    if (spawn.level == level) level_updates.erase(id);
+    else level_updates.insert_or_assign(id, LevelUpdate{spawn.incarnation, spawn.level, level});
+}
+
+std::optional<std::uint32_t> observed_level(const HailstoneNameplateCandidate& actor) {
+    if (level_updates.empty() || (actor.flags & (HAILSTONE_NAMEPLATE_SELF | HAILSTONE_NAMEPLATE_CORPSE))) return {};
+    const auto update = level_updates.find(actor.spawn_id);
+    if (update == level_updates.end()) return {};
+    // Prefer the host as soon as it updates the spawn or replaces its incarnation.
+    if (update->second.incarnation != actor.incarnation || update->second.previous_host_level != actor.level) {
+        level_updates.erase(update);
+        return {};
+    }
+    return update->second.level;
 }
 
 void observe_actor(const HailstoneNameplateCandidate& actor) {
@@ -235,6 +271,7 @@ void canvas(void*, const HailstoneNameplateFrame* frame) {
         observation.remote_mana = source.resources.mana_percent;
         observation.remote_endurance = source.resources.endurance_percent;
         observation.con_color = source.consider_color;
+        observation.observed_level = observed_level(actor);
         std::string legacy_caption;
         if (show_names && has_secondary_caption) {
             const auto* record = static_cast<const std::byte*>(frame->candidates) +
@@ -301,7 +338,10 @@ void refresh_registration() {
     }
     constexpr auto observation_caps = canvas_caps | HAILSTONE_CAP_PACKETS;
     const bool new_packets = (caps & observation_caps) == observation_caps;
-    if (!new_packets && packets_allowed) reset_indicators();
+    if (!new_packets && packets_allowed) {
+        reset_indicators();
+        level_updates.clear();
+    }
     packets_allowed = new_packets;
 }
 
@@ -532,6 +572,9 @@ HAILSTONE_API void OnPulse() {
 }
 
 HAILSTONE_API void OnBeginZone() { reset_world(); }
+HAILSTONE_API void SetGameState(int state) {
+    if (state != GAMESTATE_INGAME) level_updates.clear();
+}
 HAILSTONE_API void OnRemoveSpawn(std::uint32_t id) { forget_actor(id); }
 HAILSTONE_API int OnPacket(int stream, int direction, HailstonePacket* packet) {
     if (!packets_allowed || stream != HAILSTONE_STREAM_ZONE || direction != HAILSTONE_IN || !packet || !packet->data) return 0;
@@ -543,7 +586,8 @@ HAILSTONE_API int OnPacket(int stream, int direction, HailstonePacket* packet) {
         }
         sync_indicator_scope();
         if (indicators.receive(packet->opcode, bytes, now_ms())) server_data = true;
-    } else if (packet->opcode == 0x7280 && bytes.size() >= 4) forget_actor(crest::wire::le32(bytes, 0));
+    } else if (packet->opcode == spawn_appearance_opcode) observe_level(bytes);
+    else if (packet->opcode == 0x7280 && bytes.size() >= 4) forget_actor(crest::wire::le32(bytes, 0));
     else if (packet->opcode == 0x3791 || packet->opcode == 0x5f42) {
         gameplay.receive_points(host, packet->opcode, bytes);
         sync_indicator_scope();

@@ -13,7 +13,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 NAME = 'crest'
-VERSION = '0.3.0-preview.9'
+VERSION = '0.3.0-preview.10'
 MIN_CLIENT = '0.7.1-beta'
 CAPS = 'read,commands,ui,extend,packets'
 AUTHOR = 'Fryguy'

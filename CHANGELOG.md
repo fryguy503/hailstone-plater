@@ -1,5 +1,9 @@
 # Changes
 
+## 0.3.0-preview.10
+
+- Refresh overhead level labels when the server announces a new level, including for nearby players who stay in the zone. On clients with stale spawn levels, this uses Crest's existing packet permission.
+
 ## 0.3.0-preview.9
 
 - Hide blank NPC nameplates, including the decorative bodies in the Plane of Tactics arena. Named NPCs and real corpses still follow your Crest settings.

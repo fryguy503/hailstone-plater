@@ -16,6 +16,8 @@ Use Hailstone's `/shownames` (or `/show`) to change player captions immediately.
 
 Server-supplied NPC descriptions such as `(Shadow Knight Guildmaster)` appear below NPC names, including on Hailstone 0.7.2-beta. Pet owner lines follow Hailstone's Pet Owner Names option on clients that supply the secondary caption.
 
+Overhead level labels update when the server reports a level change. Crest uses its existing packet permission when the client still reports the old level.
+
 Use `/crest help` to list commands. `/crest parens` shows parentheses only, `/crest parens-tags` shows parentheses and type tags, `/crest tags` shows tags, `/crest suffix` adds a name suffix, and `/crest concealment-off` hides the cue. Use `/crest on`, `off`, `toggle`, `save`, or `status` for common actions. `/crest stop` suspends the renderer until you run `/crest on` or reload the add-on.
 
 ## Build and package
@@ -42,5 +44,5 @@ python native/tools/package.py --client-source <path-to-hailstone-source> \
   --platform windows-x64=path/to/crest.dll \
   --platform linux-x64=path/to/crest.so \
   --platform macos-arm64=path/to/crest.dylib \
-  --out native/release/0.3.0-preview.9
+  --out native/release
 ```

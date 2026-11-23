@@ -338,7 +338,8 @@ std::optional<PreparedPlate> PresentationEngine::prepare(const HailstoneNameplat
     plate.text_color = color("text_color");
     plate.name_color = con_name && extra.con_color ? *extra.con_color : plate.text_color;
     plate.level_color = plate.name_color;
-    if (actor.level && settings.boolean("show_level")) plate.level = "Lv " + std::to_string(actor.level);
+    const auto level = extra.observed_level.value_or(actor.level);
+    if (level && settings.boolean("show_level")) plate.level = "Lv " + std::to_string(level);
     if (settings.boolean("show_class") && class_index < classes.size()) add_joined(plate.subtitle, classes[class_index]);
     if (settings.boolean("show_distance")) add_joined(plate.subtitle, decimal(distance) + "u");
 
